@@ -1,0 +1,14 @@
+# Usual Emacs suspects
+*~
+\#*#
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
+
+# Visual Studio ignores
+**/.vs
+**/bin
+**/obj
