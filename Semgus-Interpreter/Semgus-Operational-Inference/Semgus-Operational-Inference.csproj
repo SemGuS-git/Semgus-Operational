@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Semgus-Parser\Semgus-Lib\Semgus-Lib.csproj" />
     <ProjectReference Include="..\Semgus-Operational\Semgus-Operational.csproj" />
+    <ProjectReference Include="..\Util\Util.csproj" />
   </ItemGroup>
 
 </Project>
