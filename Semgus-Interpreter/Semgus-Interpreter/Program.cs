@@ -24,6 +24,11 @@ public static class Program {
         var lib = OperationalConverter.ProcessProductions(handler.OutSmt.Theories, handler.OutSem.Chcs.ToList());
 
         Console.WriteLine("OK 2");
+
+        var grammar = OperationalConverter.ProcessGrammar(handler.OutSem.SynthFuns.First().Grammar, lib);
+
+        Console.WriteLine("OK 3");
+
     }
 
     public class MyHandler : ISemgusProblemHandler {

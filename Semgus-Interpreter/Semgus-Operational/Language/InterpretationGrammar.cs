@@ -1,17 +1,36 @@
 using Semgus.Model;
 using Semgus.Util;
+using System.Text;
 
 namespace Semgus.Interpretation {
     public class InterpretationLibrary {
+        private readonly IReadOnlyDictionary<string, ProductionRuleInterpreter> _signatureMap;
         public IReadOnlyList<ProductionRuleInterpreter> Productions { get; }
 
         public InterpretationLibrary(IReadOnlyList<ProductionRuleInterpreter> productions) {
             Productions = productions;
+            _signatureMap = productions.ToDictionary(prod => ToSyntaxKey(prod.TermType,prod.SyntaxConstructor));
         }
 
-        public bool TryFind(SemgusGrammar.NonTerminal instance, SemgusTermType.Constructor constructor, out ProductionRuleInterpreter prod) {
-            throw new NotImplementedException();
+        public bool TryFind(SemgusTermType termType, SemgusTermType.Constructor constructor, out ProductionRuleInterpreter prod) => _signatureMap.TryGetValue(ToSyntaxKey(termType, constructor), out prod);
+
+        private static string ToSyntaxKey(SemgusTermType termType, SemgusTermType.Constructor ctor) {
+            var sb = new StringBuilder();
+            sb.Append(termType.Name.AsString());
+            sb.Append(':');
+            sb.Append(ctor.Operator.AsString());
+            if (ctor.Children.Length > 0) {
+
+                sb.Append('(');
+                foreach (var child in ctor.Children) {
+                    sb.Append(child.Name.AsString());
+                    sb.Append(',');
+                }
+                sb.Append(')');
+            }
+            return sb.ToString();
         }
+
     }
 
 

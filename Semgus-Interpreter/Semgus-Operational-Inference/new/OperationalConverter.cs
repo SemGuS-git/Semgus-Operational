@@ -11,6 +11,7 @@ using Semgus.Model.Smt.Theories;
 using Semgus.Util;
 
 namespace Semgus {
+
     public static class OperationalConverter
     {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
@@ -23,7 +24,7 @@ namespace Semgus {
             }
 
             foreach(var prod in g.Productions) {
-                if(!lib.TryFind(prod.Instance,prod.Constructor,out var interp)) {
+                if(!lib.TryFind(prod.Instance.Sort,prod.Constructor,out var interp)) {
                     throw new KeyNotFoundException("Unable to find production");
                 }
                 dict.Add(prod.Instance.Convert(), new(interp, prod.Occurrences.Select(a => a.Convert()).ToList()));
