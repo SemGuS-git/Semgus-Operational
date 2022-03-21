@@ -29,9 +29,9 @@ namespace Semgus.Interpretation {
 
         public static SmtIntsTheoryImpl Instance { get; } = new ();
 
-        private SmtIntsTheoryImpl() : base(TEMPLATES) { }
+        private SmtIntsTheoryImpl() : base(MakeTemplates()) { }
 
-        private static readonly FunctionTemplate[] TEMPLATES = new FunctionTemplate[] {
+        private static FunctionTemplate[] MakeTemplates() => new FunctionTemplate[] {
             new (
                 new("+"),
                 rank => rank.Arity >= 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),

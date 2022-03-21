@@ -6,5 +6,5 @@ namespace Semgus.Interpretation {
     /// (not including child terms)
     /// </summary>
     /// 
-    public sealed record VariableInfo (string Name, int Index, SmtSort Type, VariableUsage Usage);
+    public sealed record VariableInfo (string Name, int Index, SmtSort Sort, VariableUsage Usage);
 }

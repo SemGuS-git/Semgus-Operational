@@ -14,11 +14,12 @@ namespace Semgus.Interpretation {
             FunctionInstance? found = default;
 
             foreach (var theory in _members) {
-                if (theory.TryGetFunction(def, rank, out found)) {
+                if (theory.TryGetFunction(def, rank, out var temp)) {
                     if (any) {
                         throw new Exception("Ambiguous theory function match");
                     } else {
                         any = true;
+                        found = temp;
                     }
                 }
             }

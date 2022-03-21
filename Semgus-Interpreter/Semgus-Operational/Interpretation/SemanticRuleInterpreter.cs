@@ -43,6 +43,6 @@ namespace Semgus.Interpretation {
             }
         }
 
-        public override string ToString() => string.Join(";\n", Steps.Select(s => s.PrintCode()));
+        public string PrintCode() => string.Join(";\n", Steps.Select(s => s.PrintCode()));
     }
 }

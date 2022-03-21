@@ -8,9 +8,9 @@ namespace Semgus.Interpretation {
 
         public static SmtCoreTheoryImpl Instance { get; } = new();
 
-        private SmtCoreTheoryImpl() : base(TEMPLATES) { }
+        private SmtCoreTheoryImpl() : base(MakeTemplates()) { }
 
-        private static readonly FunctionTemplate[] TEMPLATES = new FunctionTemplate[] {
+        private static FunctionTemplate[] MakeTemplates() => new FunctionTemplate[] {
             new (
                 SmtCommonIdentifiers.FN_AND,
                 rank => AllSortsMatch(rank,SmtCommonIdentifiers.SORT_BOOL),
@@ -33,6 +33,11 @@ namespace Semgus.Interpretation {
             ),
             new (
                 new("!"),
+                rank => rank.Arity == 1 && AllSortsMatch(rank,SmtCommonIdentifiers.SORT_BOOL),
+                rank => args => !(bool)args[0]
+            ),
+            new (
+                new("not"),
                 rank => rank.Arity == 1 && AllSortsMatch(rank,SmtCommonIdentifiers.SORT_BOOL),
                 rank => args => !(bool)args[0]
             ),

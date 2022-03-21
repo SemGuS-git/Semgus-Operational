@@ -24,7 +24,7 @@ namespace Semgus {
 
             TermVariableInfo? subject = null;
 
-            List<VariableInfo> inputs = new(), outputs = new();
+            List<(bool isOutput, VariableInfo info)> args = new();
 
             for (int i = 0; i < slots.Count; i++) {
                 var arg = rel.Arguments[i];
@@ -34,12 +34,9 @@ namespace Semgus {
                         if (!_terms.TryMatch(arg, out subject)) throw new InvalidDataException("Unknown term variable identifier");
                         break;
                     case RelationSlotLabel.Input:
-                        if (!Variables.TryMatch(arg, out var info0)) throw new InvalidDataException("Unknown variable identifier");
-                        inputs.Add(info0);
-                        break;
                     case RelationSlotLabel.Output:
-                        if (!Variables.TryMatch(arg, out var info1)) throw new InvalidDataException("Unknown variable identifier");
-                        outputs.Add(info1);
+                        if (!Variables.TryMatch(arg, out var info0)) throw new InvalidDataException("Unknown variable identifier");
+                        args.Add((slots[i].Label == RelationSlotLabel.Output, info0));
                         break;
                 }
             }
@@ -47,8 +44,9 @@ namespace Semgus {
             if (subject is null) throw new NotSupportedException("Semantic relation with no term");
 
             // Validity check
-            if (outputs.Any(var => var.Usage == VariableUsage.Input)) throw new NotSupportedException("Semantic relation binding a value to variable marked as input");
-            return new(subject, inputs, outputs);
+            if (args.Any(tu => tu.isOutput && tu.info.Usage == VariableUsage.Input)) throw new NotSupportedException("Semantic relation binding a value to variable marked as input");
+
+            return new(subject, args);
         }
 
         public bool MakeMaybeSetter(SmtFunctionApplication node, out AmbiguousVariableEquality? step) {
@@ -95,7 +93,7 @@ namespace Semgus {
 
                     return new FunctionCallExpression(fn, args);
                 case SmtLiteral lit:
-                    return new LiteralExpression(lit.BoxedValue);
+                    return new LiteralExpression(lit.BoxedValue,lit.Sort);
                 case SmtVariable v:
                     if (!Variables.TryMatch(v, out var info)) throw new KeyNotFoundException();
                     depMap.TryAdd(info.Name, info);

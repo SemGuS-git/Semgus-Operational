@@ -30,8 +30,7 @@ namespace Semgus.Interpretation {
             if(Args.Count>0) {
                 sb.Append('(');
                 sb.Append(Function.Name);
-                Args[0].PrettyPrint(sb);
-                for (int i = 1; i < Args.Count; i++) {
+                for (int i = 0; i < Args.Count; i++) {
                     sb.Append(' ');
                     Args[i].PrettyPrint(sb);
                 }

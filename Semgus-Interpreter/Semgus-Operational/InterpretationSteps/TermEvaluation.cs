@@ -1,4 +1,5 @@
 using System.Text;
+using Semgus;
 
 namespace Semgus.Interpretation {
     /// <summary>
@@ -6,6 +7,9 @@ namespace Semgus.Interpretation {
     /// </summary>
     public class TermEvaluation : IInterpretationStep {
         public TermVariableInfo Term { get; }
+
+        private readonly List<(bool isOutput, VariableInfo info)> _args;
+
         public IReadOnlyList<VariableInfo> InputVariables { get; }
         public IReadOnlyList<VariableInfo> OutputVariables { get; }
         
@@ -13,12 +17,19 @@ namespace Semgus.Interpretation {
         private readonly int _n_out;
         private readonly int _n;
 
-        public TermEvaluation(TermVariableInfo term, IReadOnlyList<VariableInfo> inputVariables, IReadOnlyList<VariableInfo> outputVariables) {
+        public TermEvaluation(TermVariableInfo term, List<(bool isOutput, VariableInfo info)> args) {
+
             Term = term;
-            InputVariables = inputVariables;
-            OutputVariables = outputVariables;
-            _n_in = InputVariables.Count;
-            _n_out = OutputVariables.Count;
+            _args = args;
+
+            List<VariableInfo> inputs = new(), outputs = new();
+            foreach (var tu in args) {
+                (tu.isOutput ? outputs : inputs).Add(tu.info);
+            }
+            InputVariables = inputs;
+            OutputVariables = outputs;
+            _n_in = inputs.Count;
+            _n_out = outputs.Count;
             _n = _n_in + _n_out;
         }
 
@@ -56,20 +67,18 @@ namespace Semgus.Interpretation {
         }
 
         public string PrintCode() {
-            var names = new string[_n];
-            foreach (var v in InputVariables) { names[v.Index] = v.Name; }
-            foreach (var v in OutputVariables) { names[v.Index] = "out " + v.Name; }
-
             var sb = new StringBuilder();
             sb.Append("Eval ");
             sb.Append(Term.Name);
             sb.Append(" (");
             if (_n > 0) {
-                for (int i = 0; i < _n - 1; i++) {
-                    sb.Append(names[i]);
+                if (_args[0].isOutput) sb.Append("out ");
+                sb.Append(_args[0].info.Name);
+                for (int i = 1; i < _n; i++) {
                     sb.Append(", ");
+                    if (_args[i].isOutput) sb.Append("out ");
+                    sb.Append(_args[i].info.Name);
                 }
-                sb.Append(names[_n - 1]);
             }
             sb.Append(')');
             return sb.ToString();

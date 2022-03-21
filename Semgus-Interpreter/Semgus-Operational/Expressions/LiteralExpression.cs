@@ -1,14 +1,13 @@
-﻿using System.Text;
+﻿using Semgus.Model.Smt;
+using System.Text;
 
 namespace Semgus.Interpretation {
     public class LiteralExpression : ISmtLibExpression {
-        //public Type ResultType { get; }
+        public SmtSort Sort { get; }
         public object BoxedValue { get; }
 
-        public LiteralExpression(object boxedValue) : this(boxedValue, boxedValue.GetType()) { }
-
-        public LiteralExpression(object boxedValue, Type valueType) {
-            //this.ResultType = valueType;
+        public LiteralExpression(object boxedValue, SmtSort sort) {
+            this.Sort = sort;
             this.BoxedValue = boxedValue;
         }
 

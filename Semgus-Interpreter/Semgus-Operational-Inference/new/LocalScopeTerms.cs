@@ -12,12 +12,19 @@ namespace Semgus {
             Dictionary<string, TermVariableInfo> d = new();
             Subject = GetSubject(chc.Head);
             d.Add(Subject.Name, Subject);
-
+            
             int i = 1;
             foreach (var match_bind in chc.Binder.Bindings) {
                 var bind = match_bind.Binding;
                 if (bind.Sort is not SemgusTermType stt) throw new NotSupportedException();
+
                 var info = new TermVariableInfo(bind.StringName(), i++, stt.StringName());
+
+                var name = bind.StringName();
+                if (info.Name == Subject.Name) {
+                    throw new InvalidDataException($"Attempting to use \"{info.Name}\" as child term of \"{Subject.Name}\"; this is not permitted (in {chc.Head})");
+                }
+
                 d.Add(info.Name, info);
             }
 

@@ -11,7 +11,7 @@ using Semgus.Model.Smt.Theories;
 using Semgus.Util;
 
 namespace Semgus {
-    internal class OperationalConverter
+    public static class OperationalConverter
     {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
             HashSet<Nonterminal> nonterminals = new(g.NonTerminals.Select(a => a.Convert()));
@@ -36,6 +36,7 @@ namespace Semgus {
             return theory switch {
                 SmtCoreTheory => SmtCoreTheoryImpl.Instance,
                 SmtIntsTheory => SmtIntsTheoryImpl.Instance,
+                SmtStringsTheory => SmtStringsTheoryImpl.Instance,
                 _ => throw new NotImplementedException(),
             };
         }
