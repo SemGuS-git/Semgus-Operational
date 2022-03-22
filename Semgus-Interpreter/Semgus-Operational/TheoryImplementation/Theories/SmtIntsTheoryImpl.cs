@@ -9,6 +9,8 @@ namespace Semgus.Operational {
         private static bool IsIntCmp(SmtFunctionRank rank) => rank.Arity == 2 && rank.ReturnSort.Name == SmtCommonIdentifiers.SORT_BOOL && rank.ArgumentSorts.All(sort => sort.Name == SmtCommonIdentifiers.SORT_INT);
 
 
+        public static SmtSort IntSort { get; } = SmtIntsTheory.Instance.Sorts[SmtCommonIdentifiers.SORT_INT];
+
         // Integer division (with positive remainder)
         // Rounding down, not toward zero
         public static IntegerValue IntDiv(IntegerValue a, IntegerValue b) {
@@ -37,6 +39,7 @@ namespace Semgus.Operational {
         private static FunctionTemplate[] MakeTemplates() => new FunctionTemplate[] {
             new (
                 new("+"),
+                _=>IntSort,
                 rank => rank.Arity >= 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
                     var a = (IntegerValue) args[0];
@@ -49,17 +52,20 @@ namespace Semgus.Operational {
             // negation
             new (
                 new("-"),
+                _=>IntSort,
                 rank => rank.Arity == 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => -(IntegerValue)args[0]
             ),
             // subtraction
             new (
                 new("-"),
+                _=>IntSort,
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => (IntegerValue)args[0] - (IntegerValue) args[1]
             ),
             new (
                 new("*"),
+                _=>IntSort,
                 rank => rank.Arity >= 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
                     var a = (IntegerValue) args[0];
@@ -73,6 +79,7 @@ namespace Semgus.Operational {
             // Integer division (rounding down, not toward zero)
             new (
                 new("div"),
+                _=>IntSort,
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
                     var a0 = (IntegerValue) args[0];
@@ -90,6 +97,7 @@ namespace Semgus.Operational {
             ),
             new (
                 new("mod"),
+                _=>IntSort,
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
                     var a0 = (IntegerValue) args[0];
@@ -108,6 +116,7 @@ namespace Semgus.Operational {
             // Integer remainder, equal to sign(b) * abs(mod(a,b)) (see https://cs.nyu.edu/pipermail/smt-lib/2014/000823.html)
             new (
                 new("rem"),
+                _=>IntSort,
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
                     var a0 = (IntegerValue) args[0];
@@ -125,10 +134,10 @@ namespace Semgus.Operational {
                 }
             ),
             // Integer comparsions
-            new (new("<"), IsIntCmp, rank => args => ((IntegerValue)args[0])<((IntegerValue)args[1])),
-            new (new(">"), IsIntCmp, rank => args => ((IntegerValue)args[0])>((IntegerValue)args[1])),
-            new (new("<="), IsIntCmp, rank => args => ((IntegerValue)args[0])<=((IntegerValue)args[1])),
-            new (new(">="), IsIntCmp, rank => args => ((IntegerValue)args[0])>=((IntegerValue)args[1])),
+            new (new("<"), _=>SmtCoreTheoryImpl.BoolSort, IsIntCmp, rank => args => ((IntegerValue)args[0])<((IntegerValue)args[1])),
+            new (new(">"), _=>SmtCoreTheoryImpl.BoolSort, IsIntCmp, rank => args => ((IntegerValue)args[0])>((IntegerValue)args[1])),
+            new (new("<="), _=>SmtCoreTheoryImpl.BoolSort, IsIntCmp, rank => args => ((IntegerValue)args[0])<=((IntegerValue)args[1])),
+            new (new(">="), _=>SmtCoreTheoryImpl.BoolSort, IsIntCmp, rank => args => ((IntegerValue)args[0])>=((IntegerValue)args[1])),
         };
     }
 }

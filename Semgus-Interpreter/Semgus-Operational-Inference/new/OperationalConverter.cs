@@ -11,7 +11,6 @@ using Semgus.Model.Smt.Theories;
 using Semgus.Util;
 
 namespace Semgus {
-
     public static class OperationalConverter
     {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
@@ -43,14 +42,14 @@ namespace Semgus {
             };
         }
 
-        public static InterpretationLibrary ProcessProductions(IEnumerable<ISmtTheory> theories, IReadOnlyList<SemgusChc> chcList) {
-            var theoryImpl = new UnionTheoryImpl(theories.Select(MapTheory));
+        public static InterpretationLibrary ProcessProductions(IEnumerable<ISmtTheory> theories, IEnumerable<SemgusChc> chcs) {
+            var theory = new UnionTheoryImpl(theories.Select(MapTheory));
 
-            var relations = new RelationTracker(chcList);
+            var relations = new RelationTracker(chcs);
 
             Dictionary<string,ProductionRuleInterpreter> productions = new();
 
-            foreach(var chc in chcList) {
+            foreach(var chc in chcs) {
                 var binder = chc.Binder;
                 if (binder.Constructor is null) throw new NullReferenceException("CHC missing syntax constructor");
 
@@ -64,13 +63,13 @@ namespace Semgus {
                     prod = new(binder.ParentType, binder.Constructor, variables.Inputs.ToList(), variables.Outputs.ToList());
                     productions.Add(key, prod);
                 }
-                var helper = new NamespaceContext(theoryImpl, relations, new LocalScopeTerms(chc), variables);
+                var helper = new NamespaceContext(theory, relations, new LocalScopeTerms(chc), variables);
 
                 var sem = GetChcSemantics(helper, prod, chc);
                 prod.AddSemanticRule(sem);
             }
 
-            return new(relations, productions.Values.ToList());
+            return new(theory, relations, productions.Values.ToList());
         }
 
         static string ToSyntaxKey(SemgusTermType termType, SemgusTermType.Constructor ctor) {

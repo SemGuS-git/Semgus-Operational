@@ -26,5 +26,26 @@ namespace Semgus.Operational {
             fn = found;
             return any;
         }
+
+        public bool TryGetFunction(SmtIdentifier id, IEnumerable<SmtSort> argSorts, [NotNullWhen(true)] out SmtSort? returnSort, [NotNullWhen(true)] out FunctionInstance? fn) {
+            var any = false;
+            SmtSort? sort = default; 
+            FunctionInstance? found = default;
+
+            foreach (var theory in _members) {
+                if (theory.TryGetFunction(id, argSorts, out var tempSort, out var tempFn)) {
+                    if (any) {
+                        throw new Exception("Ambiguous theory function match");
+                    } else {
+                        any = true;
+                        sort = tempSort;
+                        found = tempFn;
+                    }
+                }
+            }
+            returnSort = sort;
+            fn = found;
+            return any;
+        }
     }
 }

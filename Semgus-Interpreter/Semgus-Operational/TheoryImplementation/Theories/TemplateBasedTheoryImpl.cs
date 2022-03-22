@@ -43,5 +43,36 @@ namespace Semgus.Operational {
             fn = found;
             return any;
         }
+        public bool TryGetFunction(SmtIdentifier id, IEnumerable<SmtSort> argSorts, [NotNullWhen(true)] out SmtSort? returnSort, [NotNullWhen(true)] out FunctionInstance? fn) {
+            if (!_templatesByName.TryGetValue(id, out var list)) {
+                returnSort = default;
+                fn = default;
+                return false;
+            }
+            var sortsArray = argSorts.ToArray();
+            var any = false;
+            SmtSort? sort = default;
+            FunctionInstance? found = default;
+
+            foreach (var opt in list) {
+                var candidateSort = opt.SuggestReturnSort(sortsArray);
+                if (candidateSort is null) continue;
+
+                var rank = new SmtFunctionRank(candidateSort, sortsArray);
+
+                if (opt.Validate(rank)) {
+                    if (any) {
+                        throw new Exception("Ambiguous theory function match");
+                    } else {
+                        any = true;
+                        sort = candidateSort;
+                        found = opt.GetInstance(rank);
+                    }
+                }
+            }
+            returnSort = sort;
+            fn = found;
+            return any;
+        }
     }
 }

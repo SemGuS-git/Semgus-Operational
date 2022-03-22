@@ -10,6 +10,7 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
 using Microsoft.Extensions.Logging;
+using Semgus.Operational;
 
 public static class Program {
     public static void Main(string[] args) {
@@ -38,7 +39,7 @@ public static class Program {
         var sf = handler.OutSem.SynthFuns.Single();
         var bc = handler.OutSem.Constraints.Where(c=>InductiveConstraintConverter.IsShapedLikeBehaviorExampleFor(sf,c)).ToList();
 
-        var spec = InductiveConstraintConverter.ProcessConstraints(sf, bc, lib.Relations);
+        var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.Relations).ProcessConstraints(bc);
 
         Console.WriteLine("OK 4");
         var solver = new BottomUpSolver(new() { CostFunction = TermCostFunction.Size, Reductions = new(){ ReductionMethod.ObservationalEquivalence} });
@@ -47,12 +48,21 @@ public static class Program {
         var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
         solver.Logger = logger;
 
+        var demos = handler.Demos.SelectMany(a => DemoBlockConverter.ProcessAttributeValue(lib, a)).ToList();
+        var tests = handler.Tests.SelectMany(a => DemoBlockConverter.ProcessAttributeValue(lib, a)).ToList();
+
+        var interpreter = new InterpreterHost(1000);
+        var result0 = interpreter.RunProgram(tests[0].Program, tests[0].ArgLists[0]);
+
+        Console.WriteLine("OK 5");
+
         var result = solver.Run(grammar, spec);
 
 
 
-        Console.WriteLine("OK 5");
+        Console.WriteLine("OK 6");
     }
+
 
     private static LoggerConfiguration MakeLogCfg(LogEventLevel logLevel) =>
         new LoggerConfiguration()
@@ -64,6 +74,9 @@ public static class Program {
         public SmtContext? OutSmt { get; private set; }
         public SemgusContext? OutSem { get; private set; }
 
+        public List<SmtAttributeValue> Demos { get; } = new();
+        public List<SmtAttributeValue> Tests { get; } = new();
+
         public void OnCheckSynth(SmtContext smtCtx, SemgusContext semgusCtx) {
             this.OutSmt = smtCtx;
             this.OutSem = semgusCtx;
@@ -74,7 +87,14 @@ public static class Program {
         }
 
         public void OnSetInfo(SmtContext ctx, SmtAttribute attr) {
-
+            switch (attr.Keyword.Name) {
+                case "demo":
+                    Demos.Add(attr.Value);
+                    break;
+                case "test":
+                    Tests.Add(attr.Value);
+                    break;
+            }
         }
 
         public void OnSynthFun(SmtContext ctx, SmtIdentifier name, IList<SmtConstant> args, SmtSort sort) {

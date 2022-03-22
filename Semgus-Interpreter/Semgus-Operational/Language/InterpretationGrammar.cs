@@ -1,4 +1,5 @@
 using Semgus.Model;
+using Semgus.Model.Smt;
 using Semgus.Util;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -7,16 +8,24 @@ namespace Semgus.Operational {
     public class InterpretationLibrary {
         private readonly IReadOnlyDictionary<string, ProductionRuleInterpreter> _signatureMap;
 
+        public ITheoryImplementation Theory { get; }
         public RelationTracker Relations { get; }
         public IReadOnlyList<ProductionRuleInterpreter> Productions { get; }
 
-        public InterpretationLibrary(RelationTracker relations, IReadOnlyList<ProductionRuleInterpreter> productions) {
+        public InterpretationLibrary(ITheoryImplementation theory, RelationTracker relations, IReadOnlyList<ProductionRuleInterpreter> productions) {
+            Theory = theory;
             Relations = relations;
             Productions = productions;
             _signatureMap = productions.ToDictionary(prod => ToSyntaxKey(prod.TermType,prod.SyntaxConstructor));
         }
 
         public bool TryFind(SemgusTermType termType, SemgusTermType.Constructor constructor, [NotNullWhen(true)] out ProductionRuleInterpreter? prod) => _signatureMap.TryGetValue(ToSyntaxKey(termType, constructor), out prod);
+
+        private IEnumerable<ProductionRuleInterpreter> FindByConstructor(SemgusTermType? termType, SmtIdentifier id,  int arity) => Productions.Where(
+            prod => (termType is null || prod.TermType.Name == termType.Name) && 
+            prod.SyntaxConstructor.Operator == id && 
+            prod.SyntaxConstructor.Children.Length == arity
+        );
 
         private static string ToSyntaxKey(SemgusTermType termType, SemgusTermType.Constructor ctor) {
             var sb = new StringBuilder();
@@ -35,6 +44,35 @@ namespace Semgus.Operational {
             return sb.ToString();
         }
 
+        private static readonly NtSymbol MANUAL_NT = new(":manual");
+
+        public IDSLSyntaxNode ParseAST(SmtAttributeValue node, SemgusTermType? termType = null) {
+            switch (node.Type) {
+                case SmtAttributeValue.AttributeType.Identifier:
+                    return new DSLSyntaxNode(MANUAL_NT, FindByConstructor(termType, node.IdentifierValue!, 0).Single());
+
+                case SmtAttributeValue.AttributeType.List:
+                    var list = node.ListValue!;
+                    
+                    var head = list[0];
+                    if (head.Type != SmtAttributeValue.AttributeType.Identifier) {
+                        throw new ArgumentException();
+                    }
+
+                    var prod0 = Productions.Where(prod => prod.SyntaxConstructor.Operator == head.IdentifierValue!).ToList();
+
+                    var prod = FindByConstructor(termType, head.IdentifierValue!, list.Count - 1).Single();
+                    var ch = new List<IDSLSyntaxNode>();
+
+                    for(int i = 1; i < list.Count;i++) {
+                        ch.Add(ParseAST(list[i], (SemgusTermType)prod.SyntaxConstructor.Children[i-1]));
+                    }
+
+                    return new DSLSyntaxNode(MANUAL_NT, prod, ch);
+                default:
+                    throw new ArgumentException();
+            }
+        }
     }
 
 
