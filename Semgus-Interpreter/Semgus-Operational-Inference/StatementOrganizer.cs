@@ -3,13 +3,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class StatementOrganizer {
         class StepLexComparer : IComparer<IInterpretationStep> {
             public static StepLexComparer Instance { get; } = new StepLexComparer();
             private StepLexComparer() { }
 
-            public int Compare(IInterpretationStep x, IInterpretationStep y) {
+            public int Compare(IInterpretationStep? x, IInterpretationStep? y) {
+                if (x is null || y is null) throw new NullReferenceException();
+
                 var baseline = GetIntCode(x).CompareTo(GetIntCode(y));
                 if (baseline != 0) return baseline;
                 return (x, y) switch {

@@ -1,4 +1,4 @@
-﻿using Semgus.Interpretation;
+﻿using Semgus.Operational;
 using Semgus.Model.Smt.Terms;
 using static Semgus.Model.SemgusChc;
 
@@ -20,7 +20,7 @@ namespace Semgus {
 
         public TermEvaluation MakeTermEvaluation(SemanticRelation rel) {
             if (!_relations.TryMatch(rel, out var relInfo)) throw new InvalidDataException("Unable to match semantic relation signature");
-            var slots = relInfo.Slots;
+            var slots = relInfo!.Slots;
 
             TermVariableInfo? subject = null;
 

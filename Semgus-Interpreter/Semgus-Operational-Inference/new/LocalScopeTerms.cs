@@ -1,7 +1,8 @@
-﻿using Semgus.Interpretation;
+﻿using Semgus.Operational;
 using Semgus.Model;
 using Semgus.Model.Smt.Terms;
 using static Semgus.Model.SemgusChc;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Semgus {
     public class LocalScopeTerms {
@@ -31,7 +32,7 @@ namespace Semgus {
             nameMap = d;
         }
 
-        public bool TryMatch(SmtVariable v, out TermVariableInfo info) => nameMap.TryGetValue(v.StringName(), out info);
+        public bool TryMatch(SmtVariable v, [NotNullWhen(true)] out TermVariableInfo? info) => nameMap.TryGetValue(v.StringName(), out info);
 
         private static TermVariableInfo GetSubject(SemanticRelation rel) {
             TermVariableInfo? subject = null;

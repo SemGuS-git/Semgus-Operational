@@ -1,9 +1,10 @@
 ﻿using Semgus.Model;
 using Semgus.Model.Smt.Terms;
+using System.Diagnostics.CodeAnalysis;
 using static Semgus.Model.SemgusChc;
 
 namespace Semgus {
-    internal class RelationTracker {
+    public class RelationTracker {
         private readonly IReadOnlyDictionary<string, RelationInfo> _relationMap;
 
         public RelationTracker(IEnumerable<SemgusChc> chcs) {
@@ -18,7 +19,7 @@ namespace Semgus {
 
             foreach (var chc in chcs) {
                 var head = chc.Head;
-                var key = head.Relation.StringName();
+                var key = head.Relation.Name.AsString();
 
                 int n = head.Arguments.Count;
                 if (head.Rank.Arity != n) throw new InvalidDataException();
@@ -29,7 +30,7 @@ namespace Semgus {
                 for (int i = 0; i < n; i++) {
                     var arg = head.Arguments[i];
                     if (!ReferenceEquals(arg.Sort, head.Rank.ArgumentSorts[i])) throw new InvalidDataException("Variable in semantic relation has incorrect sort");
-                    slots[i] = new RelationSlotInfo(Sort: arg.Sort, Label: infer_label(chc, arg));
+                    slots[i] = new RelationSlotInfo(Sort: arg.Sort, TopLevelVarName:arg.Name.AsString(), Label: infer_label(chc, arg));
                 }
 
                 var relInfo = new RelationInfo(key, slots);
@@ -44,8 +45,11 @@ namespace Semgus {
             _relationMap = d;
         }
 
-        public bool TryMatch(SemanticRelation rel, out RelationInfo info) {
-            return _relationMap.TryGetValue(rel.Relation.StringName(), out info);
+        public bool TryMatch(SemanticRelation rel, [NotNullWhen(true)]out RelationInfo? info) {
+            return _relationMap.TryGetValue(rel.Relation.Name.AsString(), out info);
+        }
+        public bool TryMatchName(string name, [NotNullWhen(true)]out RelationInfo? info) {
+            return _relationMap.TryGetValue(name, out info);
         }
     }
 }

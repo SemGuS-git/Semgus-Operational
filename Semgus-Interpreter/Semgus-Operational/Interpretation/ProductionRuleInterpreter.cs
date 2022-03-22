@@ -1,6 +1,6 @@
 ﻿using Semgus.Model;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class ProductionRuleInterpreter {
         public SemgusTermType TermType { get; }
         public SemgusTermType.Constructor SyntaxConstructor { get; }

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class InterpreterErrorInfo {
         public Exception InnerException { get; }
         public IInterpretationStep Step { get; }

@@ -1,6 +1,6 @@
 ﻿using Semgus.Model.Smt;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class FunctionTemplate {
         public delegate bool SignatureValidator(SmtFunctionRank rank);
         public delegate FunctionInstance.Evaluator Instantiator(SmtFunctionRank rank);

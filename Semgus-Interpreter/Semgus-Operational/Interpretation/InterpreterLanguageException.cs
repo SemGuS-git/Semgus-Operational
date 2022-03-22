@@ -1,7 +1,7 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class InterpreterLanguageException : Exception {
-        public IDSLSyntaxNode Node { get; }
-        public IReadOnlyDictionary<string, object> InputVariables { get; }
+        public IDSLSyntaxNode? Node { get; }
+        public IReadOnlyDictionary<string, object>? InputVariables { get; }
 
         public InterpreterLanguageException(string message) : base(message) { }
 

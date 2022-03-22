@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public static class DSLSyntaxNodeExtensions {
 
         // TODO: these methods assume that input and output variables are unique. Rethink?

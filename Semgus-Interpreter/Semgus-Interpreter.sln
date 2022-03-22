@@ -15,6 +15,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Util", "Util\Util.csproj", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ParserLibrary", "..\Semgus-Parser\ParserLibrary\ParserLibrary.csproj", "{FB2D035E-B111-45C3-8AA0-E58B5F475288}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solvers", "Semgus-Solvers-Enumerative\Solvers.csproj", "{56425AAA-8831-4B49-9F11-242E36C9108E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{FB2D035E-B111-45C3-8AA0-E58B5F475288}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FB2D035E-B111-45C3-8AA0-E58B5F475288}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FB2D035E-B111-45C3-8AA0-E58B5F475288}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56425AAA-8831-4B49-9F11-242E36C9108E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56425AAA-8831-4B49-9F11-242E36C9108E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56425AAA-8831-4B49-9F11-242E36C9108E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56425AAA-8831-4B49-9F11-242E36C9108E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

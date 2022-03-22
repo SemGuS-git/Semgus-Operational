@@ -1,7 +1,9 @@
 ﻿using Semgus.Model.Smt;
 using Semgus.Model.Smt.Theories;
 
-namespace Semgus.Interpretation {
+using IntegerValue = System.Int64;
+
+namespace Semgus.Operational {
     public class SmtIntsTheoryImpl : TemplateBasedTheoryImpl {
         private static bool AllSortsMatch(SmtFunctionRank rank, SmtIdentifier return_sort_id) => rank.ReturnSort.Name == return_sort_id && rank.ArgumentSorts.All(sort => sort.Name == return_sort_id);
         private static bool IsIntCmp(SmtFunctionRank rank) => rank.Arity == 2 && rank.ReturnSort.Name == SmtCommonIdentifiers.SORT_BOOL && rank.ArgumentSorts.All(sort => sort.Name == SmtCommonIdentifiers.SORT_INT);
@@ -9,15 +11,16 @@ namespace Semgus.Interpretation {
 
         // Integer division (with positive remainder)
         // Rounding down, not toward zero
-        public static int IntDiv(int a, int b) {
+        public static IntegerValue IntDiv(IntegerValue a, IntegerValue b) {
             if (b == 0) throw new DivideByZeroException();
 
             var q = Math.DivRem(a, b, out var r);
+
             return r < 0 ? q - Math.Sign(b) : q;
         }
 
         // Integer modulus (always nonnegative)
-        public static int IntMod(int a, int b) {
+        public static IntegerValue IntMod(IntegerValue a, IntegerValue b) {
             if (b == 0) throw new DivideByZeroException();
 
             // C# remainder (toward-zero)
@@ -36,9 +39,9 @@ namespace Semgus.Interpretation {
                 new("+"),
                 rank => rank.Arity >= 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
-                    int a = (int) args[0];
+                    var a = (IntegerValue) args[0];
                     for(int i = 1; i < args.Length; i++) {
-                        a += (int) args[i];
+                        a += (IntegerValue) args[i];
                     }
                     return a;
                 }
@@ -47,21 +50,21 @@ namespace Semgus.Interpretation {
             new (
                 new("-"),
                 rank => rank.Arity == 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
-                rank => args => -(int)args[0]
+                rank => args => -(IntegerValue)args[0]
             ),
             // subtraction
             new (
                 new("-"),
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
-                rank => args => (int)args[0] - (int) args[1]
+                rank => args => (IntegerValue)args[0] - (IntegerValue) args[1]
             ),
             new (
                 new("*"),
                 rank => rank.Arity >= 1 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
-                    int a = (int) args[0];
+                    var a = (IntegerValue) args[0];
                     for(int i = 1; i < args.Length;i++) {
-                        a *= (int) args[i];
+                        a *= (IntegerValue) args[i];
                     }
                     return a;
                 }
@@ -72,8 +75,8 @@ namespace Semgus.Interpretation {
                 new("div"),
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
-                    var a0 = (int) args[0];
-                    var a1 = (int) args[1];
+                    var a0 = (IntegerValue) args[0];
+                    var a1 = (IntegerValue) args[1];
                     if(a1 == 0) {
 #if DIV_ZERO_IS_ZERO
                         return 0;
@@ -89,8 +92,8 @@ namespace Semgus.Interpretation {
                 new("mod"),
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
-                    var a0 = (int) args[0];
-                    var a1 = (int) args[1];
+                    var a0 = (IntegerValue) args[0];
+                    var a1 = (IntegerValue) args[1];
                     if(a1 == 0) {
 #if DIV_ZERO_IS_ZERO
                         return 0;
@@ -107,8 +110,8 @@ namespace Semgus.Interpretation {
                 new("rem"),
                 rank => rank.Arity == 2 && AllSortsMatch(rank, SmtCommonIdentifiers.SORT_INT),
                 rank => args => {
-                    var a0 = (int) args[0];
-                    var a1 = (int) args[1];
+                    var a0 = (IntegerValue) args[0];
+                    var a1 = (IntegerValue) args[1];
                     if(a1 == 0) {
 #if DIV_ZERO_IS_ZERO
                         return 0;
@@ -122,10 +125,10 @@ namespace Semgus.Interpretation {
                 }
             ),
             // Integer comparsions
-            new (new("<"), IsIntCmp, rank => args => ((int)args[0])<((int)args[1])),
-            new (new(">"), IsIntCmp, rank => args => ((int)args[0])>((int)args[1])),
-            new (new("<="), IsIntCmp, rank => args => ((int)args[0])<=((int)args[1])),
-            new (new(">="), IsIntCmp, rank => args => ((int)args[0])>=((int)args[1])),
+            new (new("<"), IsIntCmp, rank => args => ((IntegerValue)args[0])<((IntegerValue)args[1])),
+            new (new(">"), IsIntCmp, rank => args => ((IntegerValue)args[0])>((IntegerValue)args[1])),
+            new (new("<="), IsIntCmp, rank => args => ((IntegerValue)args[0])<=((IntegerValue)args[1])),
+            new (new(">="), IsIntCmp, rank => args => ((IntegerValue)args[0])>=((IntegerValue)args[1])),
         };
     }
 }

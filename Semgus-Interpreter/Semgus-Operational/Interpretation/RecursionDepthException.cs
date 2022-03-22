@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class RecursionDepthException : Exception {
         public int Depth { get; }
 

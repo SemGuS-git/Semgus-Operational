@@ -4,6 +4,12 @@ using Semgus.Model;
 using Semgus.Model.Smt;
 using Semgus.Model.Smt.Terms;
 using Semgus.Parser;
+using Semgus.Constraints;
+using Semgus.Solvers.Enumerative;
+using Serilog;
+using Serilog.Events;
+using Serilog.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 
 public static class Program {
     public static void Main(string[] args) {
@@ -21,7 +27,7 @@ public static class Program {
         Console.WriteLine("OK 1");
 
 
-        var lib = OperationalConverter.ProcessProductions(handler.OutSmt.Theories, handler.OutSem.Chcs.ToList());
+        var lib = OperationalConverter.ProcessProductions(handler.OutSmt!.Theories, handler.OutSem!.Chcs.ToList());
 
         Console.WriteLine("OK 2");
 
@@ -29,11 +35,34 @@ public static class Program {
 
         Console.WriteLine("OK 3");
 
+        var sf = handler.OutSem.SynthFuns.Single();
+        var bc = handler.OutSem.Constraints.Where(c=>InductiveConstraintConverter.IsShapedLikeBehaviorExampleFor(sf,c)).ToList();
+
+        var spec = InductiveConstraintConverter.ProcessConstraints(sf, bc, lib.Relations);
+
+        Console.WriteLine("OK 4");
+        var solver = new BottomUpSolver(new() { CostFunction = TermCostFunction.Size, Reductions = new(){ ReductionMethod.ObservationalEquivalence} });
+
+        using var innerLogger = MakeLogCfg(LogEventLevel.Verbose).CreateLogger();
+        var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
+        solver.Logger = logger;
+
+        var result = solver.Run(grammar, spec);
+
+
+
+        Console.WriteLine("OK 5");
     }
 
+    private static LoggerConfiguration MakeLogCfg(LogEventLevel logLevel) =>
+        new LoggerConfiguration()
+            .Enrich.FromLogContext()
+            .MinimumLevel.Is(logLevel)
+            .WriteTo.Console();
+
     public class MyHandler : ISemgusProblemHandler {
-        public SmtContext OutSmt { get; private set; }
-        public SemgusContext OutSem { get; private set; }
+        public SmtContext? OutSmt { get; private set; }
+        public SemgusContext? OutSem { get; private set; }
 
         public void OnCheckSynth(SmtContext smtCtx, SemgusContext semgusCtx) {
             this.OutSmt = smtCtx;

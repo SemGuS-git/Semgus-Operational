@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class FunctionCallExpression : ISmtLibExpression {
         public FunctionInstance Function { get; }
         public IReadOnlyList<ISmtLibExpression> Args { get; }

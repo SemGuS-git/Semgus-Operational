@@ -1,7 +1,7 @@
 ﻿using Semgus.Model.Smt;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class UnionTheoryImpl : ITheoryImplementation {
         private List<ITheoryImplementation> _members;
 

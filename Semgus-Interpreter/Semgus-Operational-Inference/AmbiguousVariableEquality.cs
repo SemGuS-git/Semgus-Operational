@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public record AmbiguousVariableEquality(
         ISmtLibExpression FullExpression,
         ISmtLibExpression RhsExpression,

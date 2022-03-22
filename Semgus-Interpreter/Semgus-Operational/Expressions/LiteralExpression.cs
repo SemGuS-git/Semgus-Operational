@@ -1,7 +1,7 @@
 ﻿using Semgus.Model.Smt;
 using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class LiteralExpression : ISmtLibExpression {
         public SmtSort Sort { get; }
         public object BoxedValue { get; }

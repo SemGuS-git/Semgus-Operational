@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class FunctionInstance {
         public delegate object Evaluator(object[] args);
 

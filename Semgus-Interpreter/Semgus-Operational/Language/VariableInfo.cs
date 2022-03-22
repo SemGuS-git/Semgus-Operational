@@ -1,6 +1,6 @@
 using Semgus.Model.Smt;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     /// <summary>
     /// Indicates the name and type of a variable that is referenced in a production rule's semantics.
     /// (not including child terms)

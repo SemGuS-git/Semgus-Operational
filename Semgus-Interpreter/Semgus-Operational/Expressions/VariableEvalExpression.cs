@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class VariableEvalExpression : ISmtLibExpression {
         public VariableInfo Variable { get; }
         //public Type ResultType => Variable.Type;

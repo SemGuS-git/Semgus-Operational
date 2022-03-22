@@ -1,7 +1,7 @@
 ﻿using Semgus.Model.Smt;
 using Semgus.Model.Smt.Theories;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
 
     public class SmtCoreTheoryImpl : TemplateBasedTheoryImpl {
         private static bool AllSortsMatch(SmtFunctionRank rank, SmtIdentifier return_sort_id) => rank.ReturnSort.Name == return_sort_id && rank.ArgumentSorts.All(sort => sort.Name == return_sort_id);

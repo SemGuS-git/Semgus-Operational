@@ -1,8 +1,8 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class InterpreterResult {
         public bool HasError { get; }
-        public InterpreterErrorInfo Error { get; }
-        public object[] Values { get; }
+        public InterpreterErrorInfo? Error { get; }
+        public object[]? Values { get; }
 
         public InterpreterResult(object[] values) {
             HasError = false;

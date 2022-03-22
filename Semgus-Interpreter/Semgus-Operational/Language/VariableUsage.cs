@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public enum VariableUsage {
         Input,
         Output,

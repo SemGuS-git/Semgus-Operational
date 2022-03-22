@@ -1,7 +1,8 @@
-﻿using Semgus.Interpretation;
+﻿using Semgus.Operational;
 using Semgus.Model;
 using Semgus.Model.Smt;
 using Semgus.Model.Smt.Terms;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Semgus {
     public class LocalScopeVariables {
@@ -9,7 +10,7 @@ namespace Semgus {
 
         private readonly IReadOnlyDictionary<string, VariableInfo> nameMap;
 
-        public bool TryMatch(SmtVariable v, out VariableInfo info) => nameMap.TryGetValue(v.StringName(), out info);
+        public bool TryMatch(SmtVariable v, [NotNullWhen(true)] out VariableInfo? info) => nameMap.TryGetValue(v.StringName(), out info);
 
         public LocalScopeVariables(SemgusChc chc) {
             List<VariableInfo> r = new();

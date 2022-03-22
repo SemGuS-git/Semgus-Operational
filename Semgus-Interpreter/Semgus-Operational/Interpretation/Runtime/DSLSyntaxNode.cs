@@ -1,13 +1,15 @@
-namespace Semgus.Interpretation {
+using System.Text;
+
+namespace Semgus.Operational {
     public class DSLSyntaxNode : IDSLSyntaxNode {
         public class Factory : INodeFactory {
             public static Factory Instance { get; } = new Factory();
 
-            public IDSLSyntaxNode Instantiate(ProductionRuleInterpreter rule) => new DSLSyntaxNode(rule);
-            public IDSLSyntaxNode Instantiate(ProductionRuleInterpreter rule, IReadOnlyList<IDSLSyntaxNode> childNodes) => new DSLSyntaxNode(rule, childNodes);
+            public IDSLSyntaxNode Instantiate(NtSymbol nonterminal, ProductionRuleInterpreter rule) => new DSLSyntaxNode(nonterminal, rule);
+            public IDSLSyntaxNode Instantiate(NtSymbol nonterminal, ProductionRuleInterpreter rule, IReadOnlyList<IDSLSyntaxNode> childNodes) => new DSLSyntaxNode(nonterminal, rule, childNodes);
         }
 
-        //public Nonterminal Nonterminal { get; }
+        public NtSymbol Nonterminal { get; }
         public ProductionRuleInterpreter ProductionRule { get; }
 
         public IReadOnlyList<IDSLSyntaxNode> AddressableTerms { get; }
@@ -17,7 +19,8 @@ namespace Semgus.Interpretation {
         public int Height { get; }
         public bool CanEvaluate => true;
 
-        public DSLSyntaxNode(ProductionRuleInterpreter interpreter, IReadOnlyList<IDSLSyntaxNode> childNodes = null) {
+        public DSLSyntaxNode(NtSymbol nonterminal, ProductionRuleInterpreter interpreter, IReadOnlyList<IDSLSyntaxNode>? childNodes = null) {
+            Nonterminal = nonterminal;
             ProductionRule = interpreter;
 
             var termList = new List<IDSLSyntaxNode>() { this };
@@ -38,6 +41,24 @@ namespace Semgus.Interpretation {
             }
         }
 
-        //public override string ToString() => ProductionRule.Syntax.PrintSyntaxTree(ChildNodes.ToList()); // todo remove listification
+        public void PrettyPrint(StringBuilder sb) {
+            if(AddressableTerms.Count>1) {
+                sb.Append('(');
+                sb.Append(ProductionRule.SyntaxConstructor.Operator.AsString());
+                for(int i = 1; i < AddressableTerms.Count; i++) {
+                    sb.Append(' ');
+                    AddressableTerms[i].PrettyPrint(sb);
+                }
+                sb.Append(')');
+            } else {
+                sb.Append(ProductionRule.SyntaxConstructor.Operator.AsString());
+            }
+        }
+
+        public override string ToString() {
+            var sb = new StringBuilder();
+            PrettyPrint(sb);
+            return sb.ToString();
+        }
     }
 }

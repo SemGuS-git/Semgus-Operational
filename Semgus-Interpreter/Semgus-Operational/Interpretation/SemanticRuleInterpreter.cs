@@ -1,4 +1,4 @@
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class SemanticRuleInterpreter {
         public ProductionRuleInterpreter ProductionRule { get; }
 
@@ -27,7 +27,7 @@ namespace Semgus.Interpretation {
 
                 // Each step may raise an error when evaluated
                 if (state.HasError) {
-                    state.Error.Trace.Add(this);
+                    state.Error!.Trace.Add(this);
                     return false;
                 }
                 if (!result) return false;

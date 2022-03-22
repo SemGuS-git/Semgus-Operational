@@ -1,4 +1,4 @@
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     /// <summary>
     /// Evaluate some formula (not containing child terms) and assign the result to a specific variable.
     /// </summary>

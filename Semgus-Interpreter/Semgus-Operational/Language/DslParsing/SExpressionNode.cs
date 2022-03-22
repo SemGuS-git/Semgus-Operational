@@ -1,16 +1,21 @@
 ﻿using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class SExpressionNode {
-        public string symbol;
+        public string Symbol { get; }
+
         public List<SExpressionNode> children = new List<SExpressionNode>();
+
+        public SExpressionNode(string symbol) {
+            Symbol = symbol;
+        }
 
         private void ToString(StringBuilder sb) {
             if(children.Count == 0) {
-                sb.Append(symbol);
+                sb.Append(Symbol);
             } else {
                 sb.Append('(');
-                sb.Append(symbol);
+                sb.Append(Symbol);
                 foreach(var ch in children) {
                     sb.Append(' ');
                     ch.ToString(sb);
@@ -44,7 +49,7 @@ namespace Semgus.Interpretation {
             void EndOfSymbol() {
                 if (builder.Length == 0) return;
 
-                var n = new SExpressionNode { symbol = builder.ToString() };
+                var n = new SExpressionNode(builder.ToString());
                 builder.Clear();
 
                 if (parenFlag) {

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public interface ISmtLibExpression {
         //Type ResultType { get; }
         object Evaluate(EvaluationContext context);

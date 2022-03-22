@@ -1,12 +1,12 @@
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     /// <summary>
     /// Slot to receive the value assigned to a variable.
     /// May correspond to an input or output.
     /// </summary>
     public class VariableReference {
         public bool HasValue { get; private set; } = false;
-        public object Value => HasValue ? _value : throw new InvalidOperationException("Attempting to access an undefined variable");
-        private object _value;
+        public object Value => HasValue ? _value! : throw new InvalidOperationException("Attempting to access an undefined variable");
+        private object? _value;
 
         /// <summary>
         /// Set this variable equal to some value.
@@ -19,6 +19,6 @@ namespace Semgus.Interpretation {
             HasValue = true;
         }
 
-        public override string ToString() => HasValue ? _value.ToString() : "None";
+        public override string ToString() => HasValue ? _value!.ToString()! : "None";
     }
 }

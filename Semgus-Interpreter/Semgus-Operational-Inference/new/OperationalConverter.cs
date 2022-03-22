@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Semgus.Interpretation;
+using Semgus.Operational;
 using Semgus.Model;
 using Semgus.Model.Smt;
 using Semgus.Model.Smt.Terms;
@@ -15,9 +15,9 @@ namespace Semgus {
     public static class OperationalConverter
     {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
-            HashSet<Nonterminal> nonterminals = new(g.NonTerminals.Select(a => a.Convert()));
+            HashSet<NtSymbol> nonterminals = new(g.NonTerminals.Select(a => a.Convert()));
 
-            DictOfList<Nonterminal, NonterminalProduction> dict = new();
+            DictOfList<NtSymbol, NonterminalProduction> dict = new();
 
             foreach (var nt in g.NonTerminals) {
                 dict.AddCollection(nt.Convert(), new());
@@ -27,7 +27,8 @@ namespace Semgus {
                 if(!lib.TryFind(prod.Instance.Sort,prod.Constructor,out var interp)) {
                     throw new KeyNotFoundException("Unable to find production");
                 }
-                dict.Add(prod.Instance.Convert(), new(interp, prod.Occurrences.Select(a => a.Convert()).ToList()));
+                var nt = prod.Instance.Convert();
+                dict.Add(nt, new(interp, nt, prod.Occurrences.Select(a => a!.Convert()).ToList()));
             }
 
             return new(dict);
@@ -57,20 +58,19 @@ namespace Semgus {
                 var variables = new LocalScopeVariables(chc);
 
                 ProductionRuleInterpreter prod;
-                if(!productions.TryGetValue(key,out prod)) {
-                    prod = new(binder.ParentType,binder.Constructor, variables.Inputs.ToList(), variables.Outputs.ToList());
-                    productions.Add(key, prod);
-                } else {
+                if (productions.TryGetValue(key, out prod!)) {
                     if (!(prod.InputVariables.SequenceEqual(variables.Inputs) && prod.OutputVariables.SequenceEqual(variables.Outputs))) throw new InvalidDataException("Mismatching variable sets for different CHCs under same production");
+                } else {
+                    prod = new(binder.ParentType, binder.Constructor, variables.Inputs.ToList(), variables.Outputs.ToList());
+                    productions.Add(key, prod);
                 }
-
                 var helper = new NamespaceContext(theoryImpl, relations, new LocalScopeTerms(chc), variables);
 
                 var sem = GetChcSemantics(helper, prod, chc);
                 prod.AddSemanticRule(sem);
             }
 
-            return new(productions.Values.ToList());
+            return new(relations, productions.Values.ToList());
         }
 
         static string ToSyntaxKey(SemgusTermType termType, SemgusTermType.Constructor ctor) {

@@ -1,18 +1,22 @@
 using Semgus.Model;
 using Semgus.Util;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public class InterpretationLibrary {
         private readonly IReadOnlyDictionary<string, ProductionRuleInterpreter> _signatureMap;
+
+        public RelationTracker Relations { get; }
         public IReadOnlyList<ProductionRuleInterpreter> Productions { get; }
 
-        public InterpretationLibrary(IReadOnlyList<ProductionRuleInterpreter> productions) {
+        public InterpretationLibrary(RelationTracker relations, IReadOnlyList<ProductionRuleInterpreter> productions) {
+            Relations = relations;
             Productions = productions;
             _signatureMap = productions.ToDictionary(prod => ToSyntaxKey(prod.TermType,prod.SyntaxConstructor));
         }
 
-        public bool TryFind(SemgusTermType termType, SemgusTermType.Constructor constructor, out ProductionRuleInterpreter prod) => _signatureMap.TryGetValue(ToSyntaxKey(termType, constructor), out prod);
+        public bool TryFind(SemgusTermType termType, SemgusTermType.Constructor constructor, [NotNullWhen(true)] out ProductionRuleInterpreter? prod) => _signatureMap.TryGetValue(ToSyntaxKey(termType, constructor), out prod);
 
         private static string ToSyntaxKey(SemgusTermType termType, SemgusTermType.Constructor ctor) {
             var sb = new StringBuilder();
@@ -37,15 +41,40 @@ namespace Semgus.Interpretation {
 
     public class NonterminalProduction {
         public ProductionRuleInterpreter Production { get; }
-        public IReadOnlyList<Nonterminal> ChildNonterminals { get; }
 
-        public NonterminalProduction(ProductionRuleInterpreter production, IReadOnlyList<Nonterminal> childNonterminals) {
+        public NtSymbol ParentNonterminal { get; }
+        public IReadOnlyList<NtSymbol> ChildNonterminals { get; }
+
+        public NonterminalProduction(ProductionRuleInterpreter production, NtSymbol parentNonterminal, IReadOnlyList<NtSymbol> childNonterminals) {
             Production = production;
+            ParentNonterminal = parentNonterminal;
             ChildNonterminals = childNonterminals;
+        }
+
+        public bool IsLeaf() => ChildNonterminals.Count == 0;
+
+        public override string ToString() {
+            var sb = new StringBuilder();
+            sb.Append(ParentNonterminal.Name);
+            sb.Append(" ::= ");
+
+            if(IsLeaf()) {
+                sb.Append(Production.SyntaxConstructor.Operator.ToString());
+            } else {
+                sb.Append('(');
+                sb.Append(Production.SyntaxConstructor.Operator.ToString());
+                foreach (var arg in ChildNonterminals) {
+                    sb.Append(arg.Name);
+                    sb.Append(' ');
+                }
+                sb.Append(')');
+            }
+
+            return sb.ToString();
         }
     }
 
-    public record Nonterminal(string Name) {
+    public record NtSymbol(string Name) {
         public override int GetHashCode() => Name.GetHashCode();
     }
 
@@ -53,12 +82,12 @@ namespace Semgus.Interpretation {
     public class InterpretationGrammar {
         public int RuleCount => Productions.ValueCount;
 
-        public IReadOnlyCollection<Nonterminal> Nonterminals => _nonterminals;
-        private readonly HashSet<Nonterminal> _nonterminals;
+        public IReadOnlyCollection<NtSymbol> Nonterminals => _nonterminals;
+        private readonly HashSet<NtSymbol> _nonterminals;
 
-        public DictOfList<Nonterminal, NonterminalProduction> Productions { get; }
+        public DictOfList<NtSymbol, NonterminalProduction> Productions { get; }
 
-        public InterpretationGrammar(DictOfList<Nonterminal, NonterminalProduction> productions) {
+        public InterpretationGrammar(DictOfList<NtSymbol, NonterminalProduction> productions) {
             _nonterminals = new(productions.Keys);
             Productions = productions;
         }

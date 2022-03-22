@@ -1,7 +1,7 @@
 using System.Text;
 using Semgus;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     /// <summary>
     /// Evaluate some child term on a collection of variables.
     /// </summary>

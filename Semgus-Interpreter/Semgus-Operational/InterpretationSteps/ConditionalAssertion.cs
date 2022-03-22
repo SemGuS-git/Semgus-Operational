@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class ConditionalAssertion : IInterpretationStep {
         public ISmtLibExpression Expression { get; }
         public IReadOnlyCollection<VariableInfo> DependencyVariables { get; }

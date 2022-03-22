@@ -1,4 +1,4 @@
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public interface IInterpretationStep {
         /// <summary>
         /// Print some imperative pseudocode to represent this statement.

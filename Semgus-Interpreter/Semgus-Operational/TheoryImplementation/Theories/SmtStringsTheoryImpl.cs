@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public class SmtStringsTheoryImpl : TemplateBasedTheoryImpl {
         public static SmtStringsTheoryImpl Instance { get; } = new();
 

@@ -1,7 +1,7 @@
 ﻿using Semgus.Model.Smt;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Semgus.Interpretation {
+namespace Semgus.Operational {
     public abstract class TemplateBasedTheoryImpl : ITheoryImplementation {
         private readonly IReadOnlyDictionary<SmtIdentifier, List<FunctionTemplate>> _templatesByName;
 

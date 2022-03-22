@@ -1,4 +1,4 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public static class InterpreterHostExtensions {
         public static IReadOnlyDictionary<string, object> RunProgramReturningDict(this InterpreterHost interpreter, IDSLSyntaxNode node, IReadOnlyDictionary<string, object> input) {
             var providedInputNames = new HashSet<string>(input.Keys);
@@ -13,9 +13,9 @@
             }
 
             var result = interpreter.RunProgram(node, input);
-            if (result.HasError) throw result.Error.InnerException;
+            if (result.HasError) throw result.Error!.InnerException;
 
-            return node.LabelOutputs(result.Values);
+            return node.LabelOutputs(result.Values!);
         }
     }
 }

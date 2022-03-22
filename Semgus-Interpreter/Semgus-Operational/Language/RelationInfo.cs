@@ -1,5 +1,5 @@
 ﻿namespace Semgus {
-    internal sealed record RelationInfo(string Name, IReadOnlyList<RelationSlotInfo> Slots) {
+    public sealed record RelationInfo(string Name, IReadOnlyList<RelationSlotInfo> Slots) {
         public bool Equals(RelationInfo? other) => other is not null && Name == other.Name && Slots.SequenceEqual(other.Slots);
 
         public override int GetHashCode() {

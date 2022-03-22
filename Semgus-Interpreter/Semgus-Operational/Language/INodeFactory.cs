@@ -1,6 +1,6 @@
-﻿namespace Semgus.Interpretation {
+﻿namespace Semgus.Operational {
     public interface INodeFactory {
-        IDSLSyntaxNode Instantiate(ProductionRuleInterpreter rule);
-        IDSLSyntaxNode Instantiate(ProductionRuleInterpreter rule, IReadOnlyList<IDSLSyntaxNode> subTerms);
+        IDSLSyntaxNode Instantiate(NtSymbol nonterminal, ProductionRuleInterpreter rule);
+        IDSLSyntaxNode Instantiate(NtSymbol nonterminal, ProductionRuleInterpreter rule, IReadOnlyList<IDSLSyntaxNode> subTerms);
     }
 }
