@@ -1,3 +1,5 @@
 # Semgus-Operational
 
-This is a new version of the Semgus interpreter and enumerative-solvers codebase to fit with the 2.0.0 format.
+This project contains code to infer the operational semantics of a Semgus language, interpret programs constructed in such a language, and solve Semgus problems via enumeration. It currently supports the 2.0.0 format.
+
+See <semgus.org> for more information.
