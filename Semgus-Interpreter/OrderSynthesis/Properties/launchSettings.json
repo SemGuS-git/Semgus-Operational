@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "OrderSynthesis": {
+      "commandName": "Project",
+      "commandLineArgs": "../../Semgus-Parser/Examples/max2-exp.sl",
+      "workingDirectory": "$(ProjectDir)"
+    }
+  }
+}
