@@ -48,8 +48,8 @@ public static class Program {
         var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
         solver.Logger = logger;
 
-        var demos = handler.Demos.SelectMany(a => DemoBlockConverter.ProcessAttributeValue(lib, a)).ToList();
         var tests = handler.Tests.SelectMany(a => DemoBlockConverter.ProcessAttributeValue(lib, a)).ToList();
+        var solns = handler.Solutions.Select(a => lib.ParseAST(a)).ToList();
 
         var interpreter = new InterpreterHost(1000);
         var result0 = interpreter.RunProgram(tests[0].Program, tests[0].ArgLists[0]);
@@ -74,8 +74,9 @@ public static class Program {
         public SmtContext? OutSmt { get; private set; }
         public SemgusContext? OutSem { get; private set; }
 
-        public List<SmtAttributeValue> Demos { get; } = new();
         public List<SmtAttributeValue> Tests { get; } = new();
+        public List<SmtAttributeValue> Solutions { get; } = new();
+
 
         public void OnCheckSynth(SmtContext smtCtx, SemgusContext semgusCtx) {
             this.OutSmt = smtCtx;
@@ -88,11 +89,11 @@ public static class Program {
 
         public void OnSetInfo(SmtContext ctx, SmtAttribute attr) {
             switch (attr.Keyword.Name) {
-                case "demo":
-                    Demos.Add(attr.Value);
-                    break;
                 case "test":
                     Tests.Add(attr.Value);
+                    break;
+                case "solution":
+                    Solutions.Add(attr.Value);
                     break;
             }
         }

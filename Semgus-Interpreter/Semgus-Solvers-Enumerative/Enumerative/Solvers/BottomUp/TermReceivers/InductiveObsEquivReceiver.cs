@@ -53,7 +53,7 @@ namespace Semgus.Solvers.Enumerative {
 
             if (sat) return TermReceiverCode.ReturnSolution;
 
-            var ntCache = _obsEquivCache.SafeGet(node.ProductionRule.TermType.Name.Symbol); // TODO: handle general name cases
+            var ntCache = _obsEquivCache.SafeGet(node.ProductionRule.TermType.Name.Name.Symbol); // TODO: handle general name cases
             return ntCache.TryAdd(outputSequence, node) ? TermReceiverCode.Retain : TermReceiverCode.Prune;
         }
     }

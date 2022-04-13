@@ -1,4 +1,5 @@
 ﻿using Semgus.Model;
+using System.Text;
 
 namespace Semgus.Operational {
     public class ProductionRuleInterpreter {
@@ -40,6 +41,20 @@ namespace Semgus.Operational {
             throw new InterpreterLanguageException("DSL runtime error: no valid semantics",node,node.LabelInputs(context.Variables));
         }
 
-        public override string ToString() => $"{SyntaxConstructor.Operator.Symbol}"; // TODO
+        public override string ToString() {
+            if(SyntaxConstructor.Children.Length == 0) {
+                return SyntaxConstructor.Operator.Symbol.ToString();
+            } else {
+                var sb = new StringBuilder();
+                sb.Append('(');
+                sb.Append(SyntaxConstructor.Operator.Symbol.ToString());
+                foreach(var ch in SyntaxConstructor.Children) {
+                    sb.Append(' ');
+                    sb.Append(ch.Name.ToString());
+                }
+                sb.Append(')');
+                return sb.ToString();
+            }
+        }
     }
 }

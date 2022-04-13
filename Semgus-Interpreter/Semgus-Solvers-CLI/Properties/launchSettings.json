@@ -2,8 +2,8 @@
   "profiles": {
     "CommandLineInterface": {
       "commandName": "Project",
-      "commandLineArgs": "-l Debug Semgus-Benchmarks/hdl/hdl-demo.toml",
-      "workingDirectory": "C:\\Users\\Wiley\\home\\uw\\semgus\\Semgus-Interpreter"
+      "commandLineArgs": "solve ../Semgus-Parser/Examples/mul-by-while.sl -l Information",
+      "workingDirectory": "$(SolutionDir)"
     }
   }
 }

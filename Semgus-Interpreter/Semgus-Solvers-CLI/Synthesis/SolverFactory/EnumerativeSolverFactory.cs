@@ -9,7 +9,7 @@ namespace Semgus.CommandLineInterface {
         public static EnumerativeSolverFactory Instance { get; } = new();
         private EnumerativeSolverFactory() { }
 
-        public IEnumerativeSolver Instantiate(SynthesisSolverConfig cfg) => cfg.MethodName switch {
+        public IEnumerativeSolver Instantiate(SynthesisConfig cfg) => cfg.MethodName switch {
             "bottom_up" => new BottomUpSolver(ToTopDownConfig(cfg.Timeout, cfg.Params)),
             "top_down" => new TopDownSolver(ToTopDownConfig(cfg.Timeout, cfg.Params)),
             _ => throw new KeyNotFoundException(),

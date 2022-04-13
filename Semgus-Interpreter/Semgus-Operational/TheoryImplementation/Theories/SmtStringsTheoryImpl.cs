@@ -1,8 +1,8 @@
-﻿namespace Semgus.Operational {
-    public class SmtStringsTheoryImpl : TemplateBasedTheoryImpl {
-        public static SmtStringsTheoryImpl Instance { get; } = new();
+﻿using Semgus.TheoryImplementation;
 
-        private SmtStringsTheoryImpl() : base(MakeTemplates()) { }
+namespace Semgus.Operational {
+    public class SmtStringsTheoryImpl : TemplateBasedTheoryImpl {
+        public SmtStringsTheoryImpl(ISortHelper sortHelper) : base(MakeTemplates()) { }
 
         private static FunctionTemplate[] MakeTemplates() => new FunctionTemplate[0]; // TODO
 

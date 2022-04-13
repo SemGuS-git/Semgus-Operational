@@ -2,7 +2,7 @@
   "profiles": {
     "Semgus-Interpreter": {
       "commandName": "Project",
-      "commandLineArgs": "$(SolutionDir)/../Semgus-Parser/Examples/max2-exp.sl"
+      "commandLineArgs": "`"
     }
   }
 }

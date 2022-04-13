@@ -9,8 +9,35 @@ using Semgus.Model.Smt;
 using Semgus.Model.Smt.Terms;
 using Semgus.Model.Smt.Theories;
 using Semgus.Util;
+using Semgus.TheoryImplementation;
 
 namespace Semgus {
+
+    public class SortHelper : ISortHelper {
+        private readonly IReadOnlyList<ISmtTheory> _theoriesList;
+
+        public SortHelper(List<ISmtTheory> theoriesList) {
+            this._theoriesList = theoriesList;
+        }
+
+        public bool TryGetSort(SmtSortIdentifier id, out SmtSort sort) {
+            SmtSort found = default;
+            bool got = false;
+            foreach (var theory in _theoriesList) {
+                if(theory.Sorts.TryGetValue(id.Name,out var now)) {
+                    if(got) {
+                        throw new Exception($"Found multiple sorts with ID {id}");
+                    } else {
+                        found = now;
+                        got = true;
+                    }
+                }
+            }
+            sort = got ? found! : default;
+            return got;
+        }
+    }
+
     public static class OperationalConverter
     {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
@@ -33,17 +60,20 @@ namespace Semgus {
             return new(dict);
         }
 
-        public static ITheoryImplementation MapTheory(ISmtTheory theory) {
-            return theory switch {
-                SmtCoreTheory => SmtCoreTheoryImpl.Instance,
-                SmtIntsTheory => SmtIntsTheoryImpl.Instance,
-                SmtStringsTheory => SmtStringsTheoryImpl.Instance,
+        public static ITheoryImplementation MapTheory(ISmtTheory theory, ISortHelper sortHelper) {
+            return theory.Name switch {
+                var a when a == SmtCommonIdentifiers.CoreTheoryId => new SmtCoreTheoryImpl(sortHelper),
+                var a when a == SmtCommonIdentifiers.IntsTheoryId => new SmtIntsTheoryImpl(sortHelper),
+                var b when b == SmtCommonIdentifiers.StringsTheoryId => new SmtStringsTheoryImpl(sortHelper),
                 _ => throw new NotImplementedException(),
             };
         }
 
         public static InterpretationLibrary ProcessProductions(IEnumerable<ISmtTheory> theories, IEnumerable<SemgusChc> chcs) {
-            var theory = new UnionTheoryImpl(theories.Select(MapTheory));
+            var theoriesList = theories.ToList();
+            var sortHelper = new SortHelper(theoriesList);
+
+            var theory = new UnionTheoryImpl(theoriesList.Select(th => MapTheory(th, sortHelper)));
 
             var relations = new RelationTracker(chcs);
 

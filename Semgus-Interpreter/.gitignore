@@ -8,3 +8,12 @@
 **/obj
 *.csproj.user
 *.pubxml.user
+
+# Semgus CLI outputs
+**/semgus-solve.*.csv
+**/semgus-solve.*.json
+**/semgus-solve.*.log
+
+**/semgus-test.*.csv
+**/semgus-test.*.json
+**/semgus-test.*.log

@@ -1,35 +1,38 @@
 ﻿using CommandLine;
 using CommandLine.Text;
-using Serilog;
 using Serilog.Events;
-using Serilog.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace Semgus.CommandLineInterface {
-    public  class Program {
+    public class Program {
+        public enum Mode {
+            solve,
+            test
+        }
+
         public class Options {
-            [Value(0, MetaName = "input", Min = 1, Required = true, HelpText = "One or more input files to be processed. May be either TOML batch configurations or individual semgus files.")]
+            [Value(0, MetaName = "mode", Required = true, HelpText = "Operation to perform. Must be one of [solve, test].")]
+            public Mode Mode { get; set; }
+
+            [Value(1, MetaName = "input", Min = 1, Required = true, HelpText = "One or more semgus files to process.")]
             public IEnumerable<string> InputFiles { get; set; }
+
+            [Option('c', "config", Required = false, Default = "", HelpText = "TOML file for configuration options. If not included, will use a default bottom-up solver configuration.")]
+            public string ConfigFile { get; set; }
 
             [Option('l', "loglevel", Required = false, Default = LogEventLevel.Debug, HelpText = "Logging level.")]
             public LogEventLevel LogLevel { get; set; }
 
-            [Option("runParseCheck", Required =false,Default =false, HelpText ="Instead of running tasks, check that each involved Semgus file can be processed and output any errors.")]
-            public bool RunParseCheck { get; set; }
-
-            [Option("writeIncremental", Required = false, Default = false, HelpText = "Update output files as each task is completed.")]
+            [Option('i', "writeIncremental", Required = false, Default = false, HelpText = "Update the output files after each input is finished, rather than at the end.")]
             public bool WriteIncremental { get; set; }
 
             [Usage]
             public static IEnumerable<Example> Examples {
                 get {
-                    yield return new Example("One file, incremental output", new Options { InputFiles = new[] { "examples/batch.toml" }, WriteIncremental = true });
-                    yield return new Example("Two files with minimal logging", new Options { InputFiles = new[] { "batch0.toml", "batch1.toml" }, LogLevel = LogEventLevel.Information });
-                    yield return new Example("Run parse check with maximum logging", new Options { RunParseCheck = true, LogLevel = LogEventLevel.Verbose, InputFiles = new[] { "examples/batch.toml" } });
-                    yield return new Example("Semgus files using default solver settings", new Options { InputFiles = new[] { "problem0.sem", "problem1.sem" }});
+                    yield return new Example("Basic usage", new Options { Mode = Mode.solve, ConfigFile = "config.toml", InputFiles = new[] { "file1.sl, file2.sl" }, LogLevel = LogEventLevel.Debug });
                 }
             }
         }
@@ -41,76 +44,28 @@ namespace Semgus.CommandLineInterface {
         }
 
         private static void Run(Options obj) {
+            var config = string.IsNullOrWhiteSpace(obj.ConfigFile) ? Configuration.Default : Configuration.FromFile(obj.ConfigFile);
+            var files = obj.InputFiles.ToList();
 
-            var batches = ReadInputFiles(obj.InputFiles.ToList());
-
-            if (obj.RunParseCheck) {
-                foreach (var batch in batches) {
-                    RunParseCheck(batch, obj.LogLevel);
-                }
-            } else {
-                foreach (var batch in batches) {
-                    RunTaskGraph(batch, obj.LogLevel, obj.WriteIncremental);
-                }
-            }
-        }
-
-        private static IReadOnlyList<TaskGroupBatch> ReadInputFiles(IReadOnlyList<string> inputFiles) {
-            bool isToml = false, isSem = false;
-
-            foreach(var file in inputFiles) {
-                if (file.EndsWith(".sem")) {
-                    if (isToml) throw new ArgumentException("May not run on a mixture of .sem and .toml files");
-                    isSem = true;
-                } else if (file.EndsWith(".toml")) {
-                    if (isSem) throw new ArgumentException("May not run on a mixture of .sem and .toml files");
-                    isToml = true;
-                } else {
-                    throw new ArgumentException("All input files must have extension .sem or .toml");
-                }
+            // check files exist first
+            foreach (var file in files) {
                 if (!File.Exists(file)) throw new FileNotFoundException("Missing input file", file);
             }
 
-            if(isSem) {
-                return new[] { TaskGroupBatch.DefaultSynthTask(Directory.GetCurrentDirectory(), inputFiles) };
-            }
-            if(isToml) {
-                return inputFiles.Select(TaskGroupBatch.ReadFileTree).ToList();
-            }
-            return Array.Empty<TaskGroupBatch>();
+            IRunner runner = obj.Mode switch {
+                Mode.solve => new SolveRunner(config, obj),
+                Mode.test => new TestRunner(config, obj),
+                _ => throw new InvalidOperationException(),
+            };
+
+            runner.RunAll(files);
+            runner.Close();
         }
-
-        private static void RunParseCheck(TaskGroupBatch batch, LogEventLevel logLevel) {
-            var logFilePath = batch.OutputPrefix + ".parse-check.log";
-            using var innerLogger = MakeLogCfg(logLevel, logFilePath).CreateLogger();
-            var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
-
-            var session = new ParseCheckSession() { Logger = logger };
-            session.Run(batch);
-        }
-
-
-        static void RunTaskGraph(TaskGroupBatch batch, LogEventLevel logLevel, bool writeIncremental) {
-            var logFilePath = batch.OutputPrefix + ".log";
-            using var innerLogger = MakeLogCfg(logLevel, logFilePath).CreateLogger();
-            var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
-
-            var session = new TaskGroupSession { Logger = logger, WriteIncremental = writeIncremental };
-            session.Run(batch);
-        }
-
-
-        private static LoggerConfiguration MakeLogCfg(LogEventLevel logLevel, string logFilePath) =>
-            new LoggerConfiguration()
-                .Enrich.FromLogContext()
-                .MinimumLevel.Is(logLevel)
-                .WriteTo.Console()
-                .WriteTo.File(logFilePath);
 
         private static void DisplayHelp(ParserResult<Options> parserResult) {
             var helpText = HelpText.AutoBuild(parserResult, h => {
                 h.Heading = "SemGuS Solver Frontend";
-                h.Copyright = "Copyright (c) 2021 University of Wisconsin-Madison";
+                h.Copyright = "Copyright (c) 2022 University of Wisconsin-Madison";
                 h.AddEnumValuesToHelpText = true;
                 return HelpText.DefaultParsingErrorsHandler(parserResult, h);
             }, e => e);

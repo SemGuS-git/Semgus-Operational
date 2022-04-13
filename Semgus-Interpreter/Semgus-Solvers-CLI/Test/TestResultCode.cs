@@ -1,5 +1,5 @@
 ﻿namespace Semgus.CommandLineInterface {
-    public enum UnitTestResultCode {
+    public enum TestResultCode {
         Pass,
         Fail,
         UnhandledException,

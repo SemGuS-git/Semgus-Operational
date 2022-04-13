@@ -98,7 +98,7 @@ namespace Semgus.Solvers.Enumerative {
 
             if (runInfo.Outcome == BottomUpLoop.StopReason.Success) {
                 Logger?.LogInformation("BottomUpSolver success ({0} t, {1}s)", runInfo.TermsEnumerated, timer.Elapsed.TotalSeconds);
-                Logger?.LogDebug("Result program: {0}", runInfo.Program);
+                Logger?.LogInformation("Result program: {0}", runInfo.Program);
             } else {
                 Logger?.LogInformation("BottomUpSolver fail ({0} t, {1}s)", runInfo.TermsEnumerated, timer.Elapsed.TotalSeconds);
             }

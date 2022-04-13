@@ -1,9 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace Semgus.Util {
-    public class Counter<TKey> {
+    public class Counter<TKey> : IReadOnlyCollection<KeyValuePair<TKey,int>> {
         private readonly AutoDict<TKey, int> _dict = new AutoDict<TKey, int>(_ => 0);
+
+        public int Count =>_dict.Count;
 
         public int Peek(TKey key) => _dict.TryGetValue(key, out var value) ? value : 0;
 
@@ -14,6 +17,13 @@ namespace Semgus.Util {
             return i;
         }
 
+        public IEnumerator<KeyValuePair<TKey, int>> GetEnumerator() {
+            return _dict.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() {
+            return ((IEnumerable)_dict).GetEnumerator();
+        }
     }
 
     /// <summary>
