@@ -7,13 +7,14 @@ using Semgus.Operational;
 using Semgus.Util;
 using System.Text;
 
-namespace Semgus.CommandLineInterface {
-    internal class Extractor {
-        List<LangFunction> functions = new();
+namespace Semgus.OrderSynthesis {
 
-        private Dictionary<string, LangTuple> inputs_by_term_type = new();
-        private Dictionary<string, LangTuple> outputs_by_term_type = new();
-        private Dictionary<string, LangTuple> observed = new();
+    internal class Extractor {
+        private readonly List<LangFunction> functions = new();
+
+        private readonly Dictionary<string, LangTuple> inputs_by_term_type = new();
+        private readonly Dictionary<string, LangTuple> outputs_by_term_type = new();
+        private readonly Dictionary<string, LangTuple> observed = new();
 
         public void Extract(InterpretationGrammar grammar) {
             List<SemanticRuleInterpreter> all_sem = new();
@@ -37,6 +38,8 @@ namespace Semgus.CommandLineInterface {
                 }
             }
         }
+
+        public static SketchSyntax.
 
         public string PrintFile() {
             var sb = new StringBuilder();
@@ -65,7 +68,7 @@ namespace Semgus.CommandLineInterface {
         }
 
         static void PrintAtoms(StringBuilder sb) {
-            foreach (var at in new[] { LangPrim.Bit, LangPrim.Int }) {
+            foreach (var at in new[] { SketchLanguage.PrimitiveType.Bit, SketchLanguage.PrimitiveType.Int }) {
                 sb.Append("generator bit ");
                 sb.Append(GetAtomGeneratorName(at));
                 sb.Append('(');
@@ -77,11 +80,11 @@ namespace Semgus.CommandLineInterface {
                 sb.AppendLine("    int t = ??;");
 
                 switch (at) {
-                    case LangPrim.Bit:
+                    case SketchLanguage.PrimitiveType.Bit:
                         sb.AppendLine("    if(t==0) { return (!a) || b; }");
                         sb.AppendLine("    return 1;");
                         break;
-                    case LangPrim.Int:
+                    case SketchLanguage.PrimitiveType.Int:
                         sb.AppendLine("    if(t==0) { return a==b; }");
                         sb.AppendLine("    if(t==1) { return a<=b; }");
                         sb.AppendLine("    if(t==2) { return a< b; }");
@@ -115,8 +118,8 @@ namespace Semgus.CommandLineInterface {
         void IncorporateInputOutputTuples(SemgusTermType tt, IReadOnlyList<VariableInfo> prod_inputs, IReadOnlyList<VariableInfo> prod_outputs) {
             var key = tt.Name.Name.Symbol;
             if (inputs_by_term_type.ContainsKey(key)) return;
-            inputs_by_term_type.Add(key, new($"In_{inputs_by_term_type.Count}", prod_inputs.Select(v => MapPrim(v.Sort)).ToList()));
-            outputs_by_term_type.Add(key, new($"Out_{inputs_by_term_type.Count}", prod_outputs.Select(v => MapPrim(v.Sort)).ToList()));
+            inputs_by_term_type.Add(key, new($"In_{inputs_by_term_type.Count}", prod_inputs.Select(v => SketchLanguage.MapPrim(v.Sort)).ToList()));
+            outputs_by_term_type.Add(key, new($"Out_{inputs_by_term_type.Count}", prod_outputs.Select(v => SketchLanguage.MapPrim(v.Sort)).ToList()));
         }
 
         LangTuple GetInputsOf(SemgusTermType tt) => inputs_by_term_type[tt.Name.Name.Symbol];
@@ -168,14 +171,14 @@ namespace Semgus.CommandLineInterface {
 
                         if (!labelMap.TryGetValue(assign.ResultVar.Name, out var result)) {
                             // I don't think this ever gets called anymore
-                            var mp = MapPrim(assign.ResultVar.Sort);
+                            var mp = SketchLanguage.MapPrim(assign.ResultVar.Sort);
                             result = new(mp, $"a{n_aux}");
                             n_aux++;
                         }
 
                         sb.Append(result.Decl);
                         sb.Append(" = ");
-                        DoExpression(sb, labelMap, assign.Expression);
+                        SketchLanguage.DoExpression(sb, labelMap, assign.Expression);
                         sb.Append(';');
                         lines.Add(sb.ToString());
                         break;
@@ -207,117 +210,11 @@ namespace Semgus.CommandLineInterface {
             return new(name, prod.ToString(), sem_output, inputs, lines);
         }
 
-        public static void DoExpression(StringBuilder sb, Dictionary<string, NextVar> labelMap, ISmtLibExpression expression) {
-            switch (expression) {
-                case VariableEvalExpression varEval:
-                    sb.Append(labelMap[varEval.Variable.Name].Name);
-                    return;
-                case LiteralExpression lit:
-                    sb.Append(lit.BoxedValue.ToString()); // may not work in all cases
-                    return;
-                case FunctionCallExpression fcall:
-                    if (TrySpecialHandling(sb, labelMap, fcall)) {
-                        return;
-                    } else if (TryAsOperator(fcall.Function.Name, out var opstring)) {
-                        switch (fcall.Args.Count) {
-                            case 0:
-                                throw new Exception();
-                            case 1:
-                                sb.Append(opstring);
-                                sb.Append('(');
-                                DoExpression(sb, labelMap, fcall.Args[0]);
-                                sb.Append(')');
-                                break;
-                            default:
-                                sb.Append('(');
-                                DoExpression(sb, labelMap, fcall.Args[0]);
-                                for (int i = 1; i < fcall.Args.Count; i++) {
-                                    sb.Append(' ');
-                                    sb.Append(opstring);
-                                    sb.Append(' ');
-                                    DoExpression(sb, labelMap, fcall.Args[i]);
-                                }
-                                sb.Append(')');
-                                break;
-                        }
-                    } else {
-                        sb.Append(MapFname(fcall.Function.Name));
 
-                        // Omit parens for unary functions, e.g. true / false in current impl
-                        if (fcall.Args.Count > 0) {
-                            sb.Append('(');
-                            DoExpression(sb, labelMap, fcall.Args[0]);
-                            for (int i = 1; i < fcall.Args.Count; i++) {
-                                sb.Append(',');
-                                sb.Append(' ');
-                                DoExpression(sb, labelMap, fcall.Args[i]);
-                            }
-                            sb.Append(')');
-                        }
-                    }
-                    return;
-                default:
-                    throw new NotSupportedException();
-            }
-        }
 
-        private static bool TrySpecialHandling(StringBuilder sb, Dictionary<string, NextVar> labelMap, FunctionCallExpression fcall) {
-            if (fcall.Function.Name == "ite") {
-                if (fcall.Args.Count != 3) throw new Exception();
-                sb.Append('(');
-                DoExpression(sb, labelMap, fcall.Args[0]);
-                sb.Append(" ? ");
-                DoExpression(sb, labelMap, fcall.Args[1]);
-                sb.Append(" : ");
-                DoExpression(sb, labelMap, fcall.Args[2]);
-                sb.Append(')');
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryAsOperator(string name, out object opstring) {
-            switch (name) {
-                case "!":
-                case "not":
-                    opstring = "!";
-                    return true;
-                case "=":
-                    opstring = "==";
-                    return true;
-                case "+":
-                case "-":
-                case "*":
-                case "<":
-                case "<=":
-                case ">":
-                case ">=":
-                    opstring = name;
-                    return true;
-                case "and":
-                    opstring = "&&";
-                    return true;
-                case "or":
-                    opstring = "||";
-                    return true;
-            }
-            opstring = default;
-            return false;
-        }
-
-        public static string MapFname(string name) {
-            return name;
-        }
-
-        public static LangPrim MapPrim(SmtSort sort) {
-            if (sort.Name == SmtCommonIdentifiers.BoolSortId) return LangPrim.Bit;
-            if (sort.Name == SmtCommonIdentifiers.IntSortId) return LangPrim.Int;
-            throw new NotSupportedException();
-        }
-
-        public static string Stringify(LangPrim prim) => prim switch {
-            LangPrim.Bit => "bit",
-            LangPrim.Int => "int",
+        public static string Stringify(SketchLanguage.PrimitiveType prim) => prim switch {
+            SketchLanguage.PrimitiveType.Bit => "bit",
+            SketchLanguage.PrimitiveType.Int => "int",
             _ => throw new NotImplementedException(),
         };
 
@@ -431,9 +328,9 @@ namespace Semgus.CommandLineInterface {
             sb.AppendLine($"    minimize({n_mono_checks}-n_mono);");
             sb.AppendLine("}");
         }
-        public static string GetAtomGeneratorName(LangPrim langPrim) => langPrim switch {
-            LangPrim.Bit => "atom_bit",
-            LangPrim.Int => "atom_int",
+        public static string GetAtomGeneratorName(SketchLanguage.PrimitiveType langPrim) => langPrim switch {
+            SketchLanguage.PrimitiveType.Bit => "atom_bit",
+            SketchLanguage.PrimitiveType.Int => "atom_int",
             _ => throw new NotSupportedException(),
         };
     }

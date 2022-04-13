@@ -1,10 +1,11 @@
 ﻿#define INT_ATOM_FLAGS
 #define INT_MONO_FLAGS
 
+using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.Util;
 using System.Text;
 
-namespace Semgus.CommandLineInterface {
+namespace Semgus.OrderSynthesis {
     internal class LangFunction {
         public LangFunction(string name, string raw_name, LangTuple sem_output, List<(string, LangTuple)> inputs, List<string> lines) {
             Name = name;
@@ -20,6 +21,7 @@ namespace Semgus.CommandLineInterface {
         public List<string> Lines { get; }
 
         readonly string raw_name;
+
 
         public void PrintDefinition(StringBuilder sb) {
             sb.AppendLine($"// {raw_name}");

@@ -3,16 +3,16 @@
 
 using System.Text;
 
-namespace Semgus.CommandLineInterface {
+namespace Semgus.OrderSynthesis {
     internal class LangTuple {
         public string name;
-        public List<LangPrim> elements;
+        public List<SketchLanguage.PrimitiveType> elements;
 
         public string EqName { get; }
         public string CompareName { get; }
         public string DisjunctName { get; }
 
-        public LangTuple(string name, List<LangPrim> elements) {
+        public LangTuple(string name, List<SketchLanguage.PrimitiveType> elements) {
             this.name = name;
             this.elements = elements;
             EqName = "eq_" + name;

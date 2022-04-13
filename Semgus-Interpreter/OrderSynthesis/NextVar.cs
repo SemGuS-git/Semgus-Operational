@@ -2,12 +2,12 @@
 #define INT_MONO_FLAGS
 
 
-namespace Semgus.CommandLineInterface {
+namespace Semgus.OrderSynthesis {
     internal class NextVar {
-        public LangPrim Type;
+        public SketchLanguage.PrimitiveType Type;
         public string Name;
 
-        public NextVar(LangPrim langPrim, string v) {
+        public NextVar(SketchLanguage.PrimitiveType langPrim, string v) {
             this.Type = langPrim;
             this.Name = v;
         }
