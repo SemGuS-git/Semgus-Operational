@@ -1,71 +1,56 @@
-﻿#define INT_ATOM_FLAGS
-#define INT_MONO_FLAGS
+﻿
+using Semgus.CommandLineInterface;
+using Semgus.OrderSynthesis.Subproblems;
 
-using System.Diagnostics;
-
-namespace Semgus.CommandLineInterface {
+namespace Semgus.OrderSynthesis {
     public class Program {
-        static void Main(string[] args) {
+        static async Task Main(string[] args) {
             var file = args[0];
 
             if (!File.Exists(file)) throw new FileNotFoundException("Missing input file", file);
 
             var items = ParseUtil.TypicalItems.Acquire(file);
 
-            var ex = new Extractor();
-            ex.Extract(items.Grammar);
+            var first = FirstStep.Extract(items.Grammar);
 
-            var s = ex.PrintFile();
+            FlexPath file_sketch = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/ord-{Path.GetFileName(file)}.sk");
 
-            System.Console.WriteLine(s);
-
-            string file_sketch = $"c:/Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch2/ord-{Path.GetFileName(file)}.sk";
             System.Console.WriteLine($"--- writing to {file_sketch} ---");
-            File.WriteAllText(file_sketch, s);
 
-            string file_sketch_wsl = "/mnt/c" + file_sketch.Substring(2);
-            string file_xml_wsl = file_sketch_wsl + ".out.holes.xml";
-            string file_out_wsl = file_sketch_wsl + ".out.txt";
+            using (StreamWriter sw = new(file_sketch.PathWin)) {
+                LineReceiver receiver = new(sw);
+                foreach (var a in first.GetFile()) {
+                    a.WriteInto(receiver);
+                }
+            }
+
+            var file_xml = file_sketch.Append(".out.holes.xml");
+            var file_out = file_sketch.Append(".out.txt");
 
 
-            System.Console.WriteLine($"--- invoking Sketch on {file_sketch_wsl} ---");
+            System.Console.WriteLine($"--- invoking Sketch on {file_sketch} ---");
 
-            wsl_run_sketch(file_sketch_wsl, file_out_wsl, file_xml_wsl);
+            var sketch_result = await Wsl.RunSketch(file_sketch, file_out, file_xml);
 
-            System.Console.WriteLine($"--- sketch finished ---");
+            if (sketch_result) {
+                Console.WriteLine($"--- Sketch succeeded ---");
+            } else {
+                Console.WriteLine($"--- Sketch rejected; halting ---");
+                return;
+            }
 
-            string file_monotonicities_wsl = file_sketch_wsl + ".out.mono.json";
-            string file_comparisons_wsl = file_sketch_wsl + ".out.cmp.sk";
+            var file_monotonicities = file_sketch.Append(".out.mono.json");
+            var file_comparisons = file_sketch.Append(".out.cmp.sk");
 
-            wsl_invoke_python("--version");
-            wsl_invoke_python("read-mono-from-xml.py", file_sketch_wsl, file_xml_wsl, file_monotonicities_wsl);
-            wsl_invoke_python("parse-cmp.py", file_out_wsl, file_comparisons_wsl);
+            await Wsl.RunPython("--version");
+            await Wsl.RunPython("read-mono-from-xml.py", file_sketch.PathWsl, file_xml.PathWsl, file_monotonicities.PathWsl);
+            await Wsl.RunPython("parse-cmp.py", file_out.PathWsl, file_comparisons.PathWsl);
 
             System.Console.WriteLine($"--- extractors finished ---");
 
             Console.ReadKey();
         }
-        
-        static void wsl_invoke(string cmd) {
-            Console.WriteLine($"invoke `wsl {cmd}`");
 
-            ProcessStartInfo start = new();
-            start.FileName = "wsl";
-            start.Arguments = cmd;
-            start.UseShellExecute = false;
-            start.RedirectStandardOutput = true;
-            using var process = Process.Start(start);
-            using var reader = process.StandardOutput;
-            while (!reader.EndOfStream) {
-                Console.WriteLine($"  wsl :: " + reader.ReadLine());
-            }
-        }
 
-        static void wsl_run_sketch(string file_sketch, string file_soln, string file_xml) => wsl_invoke($"time sketch --fe-output-xml {file_xml} {file_sketch} > {file_soln}");
-
-        static void wsl_invoke_python(string script, params string[] args) {
-            //File.WriteAllText("hello.py", "print('Hello from Python!')\nprint('This is a test.')");
-            wsl_invoke($"python3 {script} {string.Join(' ',args)}");
-        }
     }
 }

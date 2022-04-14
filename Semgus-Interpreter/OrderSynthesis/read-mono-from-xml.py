@@ -7,13 +7,13 @@ sketch_file = sys.argv[1]
 xml_file = sys.argv[2]
 out_file = sys.argv[3]
 
-find_flag_comment = re.compile(r'//#MONO (.+)_([0-9]+)')
+find_flag_comment = re.compile(r'/\*#MONO (.+)_([0-9]+)\*/')
 split_key = re.compile(r'^(.*[^ \t])[ \t]arg ([0-9]+)$')
 
 def get_monolines(fname):
     out = dict()
     i = 0
-    assert(find_flag_comment.search("abc //#MONO lang_f2_0") is not None)
+    assert(find_flag_comment.search("abc /*#MONO lang_f2_0*/") is not None)
     for line in open(fname,'r').readlines():
         i+=1
         match = find_flag_comment.search(line)
