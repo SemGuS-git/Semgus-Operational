@@ -139,7 +139,7 @@ namespace Semgus.CommandLineInterface {
                 var result = host.RunProgram(program, batch);
 
                 if (result.HasError) {
-                    return rowFactory.Fail(GetInputStr(program, batch), GetOutputStr(program, batch), result.Error.PrettyPrint(false));
+                    return rowFactory.Fail(GetInputStr(program, batch), GetOutputStr(program, batch), result.Error.PrettyPrint(true));
                 } else {
                     var status = Correctness(program, batch, result.Values);
                     return rowFactory.FromStatus(status, GetInputStr(program, batch), GetOutputStr(program, batch), GetOutputStr(program, result.Values));

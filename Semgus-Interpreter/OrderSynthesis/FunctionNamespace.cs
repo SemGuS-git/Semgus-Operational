@@ -31,7 +31,7 @@ namespace Semgus.OrderSynthesis {
                 return new InfixOperation(op, call.Args.Select(Convert).ToList());
             }
 
-            if (LibFunctions.MapSmtOrNull(call.Function.Name) is FunctionId id) {
+            if (LibFunctions.MapSmtOrNull(call.Function.Name) is Identifier id) {
                 return new FunctionEval(id, call.Args.Select(Convert).ToList());
             }
 
