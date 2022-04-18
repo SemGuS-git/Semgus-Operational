@@ -15,5 +15,6 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
         public static Parser<T> WithSemicolonOrWeirdThing<T>(this Parser<T> parser) => parser.Then(a => Parse.Char(';').Isol().Return(a).Or(Parse.String("//{};").Token().Return(a)));
 
         public static Parser<IEnumerable<T>> OrEmpty<T>(this Parser<IOption<IEnumerable<T>>> p) => p.Select(v => v.IsDefined ? v.Get() : Array.Empty<T>());
+        public static Parser<T> NotRepeated<T>(this Parser<T> p) => p.Then(val => p.Isol().Not().Return(val));
     }
 }

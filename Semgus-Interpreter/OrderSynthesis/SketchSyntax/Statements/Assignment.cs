@@ -1,6 +1,5 @@
 ﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal record Assignment  (ISettable Subject, IExpression Value)  : IStatement, IEquatable<Assignment?>  {
-
+    internal record Assignment  (ISettable Subject, IExpression Value)  : IStatement { 
         public void WriteInto(ILineReceiver lineReceiver) {
             lineReceiver.Add($"{Subject} = {Value};");
         }

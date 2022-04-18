@@ -5,4 +5,7 @@
         Or, And,
         Lt, Leq, Gt, Geq,
     }
+    enum UnaryOp {
+        Not,Minus,
+    }
 }

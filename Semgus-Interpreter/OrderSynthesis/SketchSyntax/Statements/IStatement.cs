@@ -1,5 +1,6 @@
 ﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal interface IStatement {
+
+    internal interface IStatement : INode {
         void WriteInto(ILineReceiver lineReceiver);
     }
 }

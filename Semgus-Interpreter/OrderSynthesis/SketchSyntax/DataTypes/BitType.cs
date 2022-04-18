@@ -6,14 +6,12 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
     internal class BitType : IType {
         public static BitType Instance { get; } = new();
 
-        public Identifier Id { get; } = new("bit");
-
-        public string Name => Id.Name;
-
-        private BitType() { }
+        public static Identifier Id { get; } = new("bit");
+        Identifier IType.Id => Id;
 
         public static Identifier AtomId { get; } = new("atom_bit");
-
+        
+        private BitType() { }
 
         public static FunctionDefinition GetAtom() {
             var type = Instance;
@@ -23,12 +21,12 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
 
             return new(new FunctionSignature(AtomId, FunctionModifier.Generator, BitType.Instance, new[] { var_a, var_b }),
                 new VariableDeclaration(var_t, new Hole()),
-                var_t.IfEq(X.L0, new ReturnStatement(var_a.Implies(var_b))),
-                var_t.ElseIfEq(X.L1, new ReturnStatement(var_a.ImpliedBy(var_b))),
+                var_t.IfEq(X.L0, X.Return(var_a.Implies(var_b))),
+                var_t.IfEq(X.L1, X.Return(var_a.Implies(var_b))),
                 new ReturnStatement(X.L1)
             );
         }
 
-        public override string ToString() => Name;
+        public override string ToString() => Id.ToString();
     }
 }

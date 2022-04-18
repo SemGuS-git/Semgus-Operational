@@ -4,7 +4,6 @@ using Semgus.Util;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal class FirstStep {
-        record Clasp(StructType Type, IReadOnlyList<Variable> Indexed, Variable Alternate);
 
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
@@ -17,7 +16,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         public static FirstStep Extract(Semgus.Operational.InterpretationGrammar grammar) {
             List<Semgus.Operational.SemanticRuleInterpreter> all_sem = new();
             List<FunctionDefinition> functions = new();
-            Dictionary<string, StructType> observed = new();
+            Dictionary<Identifier, StructType> observed = new();
 
             SemToSketchConverter converter = new();
 
@@ -38,9 +37,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 functions.Add(fn);
 
-                observed.TryAdd(sig.ReturnType.Name, (StructType)sig.ReturnType);
+                observed.TryAdd(sig.ReturnType.Id, (StructType)sig.ReturnType);
                 foreach (var arg in sig.Args) {
-                    observed.TryAdd(arg.Type.Name, (StructType)arg.Type);
+                    observed.TryAdd(arg.Type.Id, (StructType)arg.Type);
                 }
             }
 
@@ -72,11 +71,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public FunctionDefinition GetMain() {
-            var clasps = GetClasps();
+            var clasps = Clasp.GetAll(MaybeMonotoneFunctions.Select(f => f.Signature).Cast<FunctionSignature>());
 
             List<IStatement> body = new();
 
-            var (input_args, input_assembly_statements) = GetMainInitContent(clasps);
+            var (input_args, input_assembly_statements) = GetMainInitContent(clasps.SelectMany(c => c.Indexed.Append(c.Alternate)).ToList());
 
             body.AddRange(input_assembly_statements);
 
@@ -90,7 +89,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var n_mono = new Variable("n_mono", IntType.Instance);
             body.Add(new VariableDeclaration(n_mono, new Literal(0)));
 
-            var claspMap = clasps.ToDictionary(v => v.Type.Name);
+            var claspMap = clasps.ToDictionary(v => v.Type.Id);
             foreach (var fn in MaybeMonotoneFunctions) {
                 body.AddRange(GetMonoAssertions(n_mono, claspMap, fn));
             }
@@ -102,15 +101,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
             return new FunctionDefinition(new FunctionSignature(new("main"), FunctionModifier.Harness, VoidType.Instance, input_args), body);
         }
 
-        private static IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<string, Clasp> clasps, FunctionDefinition fn) {
+        private static IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<Identifier, Clasp> clasps, FunctionDefinition fn) {
             if (fn.Signature is not FunctionSignature sig || sig.ReturnType is not StructType type_out) throw new NotSupportedException();
 
             List<VariableRef> fixed_args = new();
 
             {
-                Counter<string> vcount = new();
+                Counter<Identifier> vcount = new();
                 foreach (var v in sig.Args) {
-                    var key = v.Type.Id.Name;
+                    var key = v.Type.Id;
                     fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
                     vcount.Increment(key);
                 }
@@ -121,21 +120,21 @@ namespace Semgus.OrderSynthesis.Subproblems {
             for (int i = 0; i < sig.Args.Count; i++) {
                 if (sig.Args[i].Type is not StructType type_i) throw new NotSupportedException();
 
-                var alt_i = clasps[type_i.Name].Alternate;
+                var alt_i = clasps[type_i.Id].Alternate;
 
                 List<VariableRef> alt_args = new(fixed_args);
                 alt_args[i] = alt_i.Ref();
 
                 var mono_flag = new Variable($"mono_{fn.Id}_{i}", IntType.Instance);
 
-                yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Alias}_{i}"));
+                yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Id}_{i}"));
                 yield return mono_flag.IfEq(X.L0,
                     new AssertStatement(
                         type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(fixed_args), fn.Call(alt_args)))
                     ),
                     n_mono.Assign(Op.Plus.Of(n_mono.Ref(), X.L1))
                 );
-                yield return mono_flag.ElseIfEq(X.L1,
+                yield return mono_flag.IfEq(X.L1,
                     new AssertStatement(
                         type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(alt_args), fn.Call(fixed_args)))
                     ),
@@ -144,47 +143,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
         }
 
-        private IReadOnlyList<Clasp> GetClasps() {
-            Dictionary<string, int> nvar = new();
-            List<StructType> participants = new();
-            foreach (var fn in MaybeMonotoneFunctions) {
-                if (fn.Signature is not FunctionSignature sig || sig.ReturnType is not StructType ret_st) throw new NotSupportedException();
-
-                if (!nvar.ContainsKey(ret_st.Name)) {
-                    nvar[ret_st.Name] = 3;
-                    participants.Add(ret_st);
-                }
-
-                Counter<string> vcounts = new();
-                foreach (var arg in sig.Args) {
-
-                    if (arg.Type is not StructType arg_st) throw new NotSupportedException();
-                    var arg_st_name = arg_st.Name;
-
-                    vcounts.Increment(arg_st_name);
-                    if (!nvar.ContainsKey(arg_st_name)) {
-                        nvar[arg.Type.Name] = 3;
-                        participants.Add(arg_st);
-                    }
-                }
-
-                foreach (var kvp in vcounts) {
-                    if (nvar[kvp.Key] < kvp.Value) nvar[kvp.Key] = kvp.Value;
-                }
-            }
-
-            return participants.Select(p =>
-                new Clasp(
-                    p,
-                    Enumerable.Range(0, nvar[p.Name]).Select(i => new Variable($"{p.Name}_s{i}", p)).ToList(),
-                    new Variable($"{p.Name}_alt", p)
-                 )
-            ).ToList();
-        }
-
-        private static (IReadOnlyList<Variable> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<Clasp> clasps) {
-            List<Variable> input_structs = clasps.SelectMany(c => c.Indexed.Append(c.Alternate)).ToList();
-
+        public static (IReadOnlyList<Variable> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<Variable> input_structs) {
             List<Variable> input_args = new();
             List<IStatement> input_assembly_statements = new();
 

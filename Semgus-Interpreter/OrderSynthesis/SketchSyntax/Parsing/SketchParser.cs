@@ -51,18 +51,18 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 select new string(first.Concat(rest).ToArray());
             Identifier = IdentifierOrKeyword.Isol().Where(Keywords.IsNotKeyword).Select(s => new Identifier(s));
 
-            Zero = Parse.Char('0').Return(0);
+            Zero = Parse.Char('0').Then(_=>Parse.LetterOrDigit.Not()).Return(0);
 
             NonZeroNumeral = Parse.Chars("123456789");
             Numeral = Parse.Chars("0123456789");
-            PositiveNumber =
+            var positiveNumber =
                 from first in NonZeroNumeral.Once()
                 from rest in Numeral.Many()
                 select int.Parse(new string(first.Concat(rest).ToArray()));
 
-            Number = Zero.XOr(Parse.Char('-').Isol().Then(_ => PositiveNumber).Select(n => -n)).XOr(PositiveNumber);
+            NonNegativeNumber = Zero.XOr(positiveNumber).Then(v => IdentifierFirstChar.Not().Return(v));
 
-            Literal = Number.Isol().Select(n => new Literal(n));
+            Literal = NonNegativeNumber.Isol().Select(n => new Literal(n));
 
             Hole = Parse.String("??").Isol().Return(new Hole());
 
@@ -94,16 +94,16 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                     where e is VariableRef v
                     select (VariableRef) e
                 )
-                from maybe_expr in (
+                from expr in (
                     Parse.Char('=').Isol().Then(_ => Expression)
-                ).Optional()
-                select new WeakVariableDeclaration(type, v.TargetId, maybe_expr.GetOrDefault());
+                ).Or(Parse.Return(Empty.Instance))
+                select new WeakVariableDeclaration(type, v.TargetId, expr);
 
 
             FunctionArg =
                 from maybe_out in Parse.String(Keywords.Ref).Isol().Optional()
                 from decl in WeakVariableDeclaration
-                where decl.Def is null
+                where decl.Def is Empty
                 select (IVariableInfo)(maybe_out.IsDefined ? new RefVariableDeclaration(decl) : decl);
 
             FunctionArgList =
@@ -169,23 +169,13 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
             IfStatement =
                 from _0 in Parse.String(Keywords.If).Isol()
                 from cond in WrappedExpression
-                from body in ProceduralBlock
-                select new IfStatement(cond, body.ToList());
-
-
-            ElseIfStatement =
-                from _0 in Parse.String(Keywords.Else).Isol()
-                from _2 in Parse.String(Keywords.If).Isol()
-                from cond in WrappedExpression
-                from body in ProceduralBlock
-                select new ElseIfStatement(cond, body.ToList());
-
-
-            ElseStatement =
-                from _0 in Parse.String(Keywords.Else).Isol()
-                from body in ProceduralBlock
-                select new ElseStatement(body.ToList());
-
+                from body in ProceduralBlock.Or(Statement.Once())
+                from opt_rhs in (
+                    from _1 in Parse.String(Keywords.Else).Isol()
+                    from body_rhs in ProceduralBlock.Or(Statement.Once())
+                    select body_rhs
+                ).Optional()
+                select new IfStatement(cond, body.ToList(), opt_rhs.IsDefined ? opt_rhs.Get().ToList() : Array.Empty<IStatement>());
 
             RepeatStatement =
                 from _0 in Parse.String(Keywords.Repeat).Isol()
@@ -201,9 +191,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
 
             ReturnStatement =
                 from _0 in Parse.String(Keywords.Return).Isol()
-                from maybe_expr in Expression.Optional()
+                from expr in Expression.Or(Parse.Return(Empty.Instance))
                 from _1 in Parse.Char(';').Isol()
-                select new ReturnStatement(maybe_expr.GetOrDefault());
+                select new ReturnStatement(expr);
 
             MinimizeStatement =
                 from _0 in Parse.String(Keywords.Minimize).Isol()
@@ -213,7 +203,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
 
 
             CallExpression =
-                from id in Identifier.Or(Parse.Char('!').Isol().Return(LibFunctions.Not))
+                from id in Identifier
                 from _0 in Parse.Char('(')//.Isol()
                 from args in Expression.DelimitedBy(Parse.Char(',').Isol())
                     .Optional()
@@ -224,31 +214,49 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 select new FunctionEval(id, args.ToList());
 
 
-            InfixOperand = Literal
+
+            IEnumerable<T> SortToDisambiguate<T>(IEnumerable<T> values,Func<T,string> stringify) {
+                var d = values.ToDictionary(stringify);
+                var strs = d.Keys.ToList();
+                strs.Sort((string a, string b) => a.StartsWith(b) ? -1 :b.StartsWith(a)? 1 : 0);
+                return strs.Select(s => d[s]);
+            }
+
+            static Parser<UnaryOp> MakeUnaryOpParser(UnaryOp op) => Parse.String(op.Str()).Return(op);
+
+            var negate = MakeUnaryOpParser(UnaryOp.Minus).Isol();
+
+            UnaryOperator =
+                MakeUnaryOpParser(UnaryOp.Not)
+                .Or(
+                    MakeUnaryOpParser(UnaryOp.Minus).NotRepeated()
+                ).Isol();
+
+
+
+            UnaryOperand = Literal
                 .Or<IExpression>(Hole)
                 .Or(StructNew)
                 .Or(CallExpression)
                 .Or(PropertyAccess)
                 .Or(VariableRef)
                 .Or(WrappedExpression);
-            
+
+            UnaryOperation =
+                from op in UnaryOperator
+                from operand in UnaryOperand
+                select new UnaryOperation(op, operand);
 
 
-            List<Op> ops_sorted = Enum.GetValues<Op>().ToList();
-            ops_sorted.Sort(
-                (Op a, Op b) => {
-                    var sa = a.Str();
-                    var sb = b.Str();
-                    if (sa.StartsWith(sb)) return -1;
-                    if (sb.StartsWith(sa)) return 1;
-                    return 0;
-                }
-            );
 
-            static Parser<Op> MakeOpParser(Op op) => Parse.String(op.Str()).Return(op);
-            var opParsers = ops_sorted.Select(MakeOpParser).ToList();
+
+            static Parser<Op> MakeOpParser(Op op) => Parse.String(op.Str()).Return(op).NotRepeated(); // Disallow unexpected repeats, e.g. 1 -- 2
+
+            var opParsers = SortToDisambiguate(Enum.GetValues<Op>(), OpExtensions.Str).Select(MakeOpParser).ToList();
 
             InfixOperator = opParsers.Skip(1).Aggregate(opParsers[0], (a, b) => a.Or(b)).Isol();
+
+            InfixOperand = UnaryOperation.Or(UnaryOperand);
 
             InfixSequence =
                 from head in InfixOperand
@@ -264,14 +272,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
 
 
 
-            var ternCond = InfixSequence
-                .Or(Literal)
-                .Or(Hole)
-                .Or(StructNew)
-                .Or(CallExpression)
-                .Or(PropertyAccess)
-                .Or(VariableRef)
-                .Or(WrappedExpression);
+            var ternCond = InfixSequence.Or(InfixOperand);
 
             Ternary =
                 from cond in ternCond
@@ -282,22 +283,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 select new Ternary(cond, lhs, rhs);
 
 
-            wrapExpr.Install(Ternary
-                .Or(InfixSequence)
-                .Or(Literal)
-                .Or(Hole)
-                .Or(StructNew)
-                .Or(CallExpression)
-                .Or(PropertyAccess)
-                .Or(VariableRef)
-                .Or(WrappedExpression)
-                );
+            wrapExpr.Install(Ternary.Or(InfixSequence).Or(InfixOperand));
 
             wrapStmt.Install(
                 StructDefinition
                 .Or<IStatement>(IfStatement)
-                .Or(ElseIfStatement)
-                .Or(ElseStatement)
                 .Or(RepeatStatement)
                 .Or(AssertStatement)
                 .Or(ReturnStatement)
@@ -332,8 +322,18 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 from _0 in skDone.Isol().Optional()
                 from t in ttime.Isol().Optional()
                 select new SketchFileContent(contents, opt_ver.GetOrDefault(), opt_file.GetOrDefault(), t.GetOrDefault());
+
+
         }
 
+        //public static Parser<FunctionDefinition> AnyFunctionIn(IEnumerable<Identifier> targets) {
+        //    var lookup = targets.ToHashSet();
+        //    return
+        //        from sig in WeakFunctionSignature
+        //        where lookup.Contains(sig.Id)
+        //        from body in ProceduralBlock
+        //        select new FunctionDefinition(sig, body.ToList());
+        //}
 
         public static Parser<SketchFileContent> WholeFile { get; }
 
@@ -349,9 +349,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
         static Parser<char> NonZeroNumeral { get; }
         static Parser<char> Numeral { get; }
 
-        static Parser<int> PositiveNumber { get; }
 
-        public static Parser<int> Number { get; }
+        public static Parser<int> NonNegativeNumber { get; }
 
         public static Parser<Literal> Literal { get; }
 
@@ -365,8 +364,6 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
         public static Parser<FunctionDefinition> FunctionDefinition { get; }
         public static Parser<StructDefinition> StructDefinition { get; }
         public static Parser<IfStatement> IfStatement { get; }
-        public static Parser<ElseIfStatement> ElseIfStatement { get; }
-        public static Parser<ElseStatement> ElseStatement { get; }
         public static Parser<RepeatStatement> RepeatStatement { get; }
         public static Parser<AssertStatement> AssertStatement { get; }
         public static Parser<ReturnStatement> ReturnStatement { get; }
@@ -382,7 +379,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
         public static Parser<Hole> Hole { get; }
         public static Parser<FunctionEval> CallExpression { get; }
         public static Parser<IExpression> InfixOperand { get; }
+        public static Parser<UnaryOp> UnaryOperator { get; }
+        public static Parser<IExpression> UnaryOperand { get; }
         public static Parser<Op> InfixOperator { get; }
+        public static Parser<UnaryOperation> UnaryOperation { get; }
         public static Parser<IExpression> InfixSequence { get; }
         public static Parser<IExpression> WrappedExpression { get; }
         public static Parser<IExpression> AnyInfixOperation { get; }

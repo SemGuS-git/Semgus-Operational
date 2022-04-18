@@ -26,7 +26,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             NonEqId = new("non_eq_" + id.Name);
         }
 
-        public override string ToString() => Name;
+        public override string ToString() => Id.ToString();
 
         public StructDefinition GetStructDef() => new StructDefinition(Id, Elements) { Comment = Comment };
 
@@ -56,6 +56,35 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
                 new ReturnStatement(var_leq.Ref())
             );
         }
+
+        public FunctionDefinition GetCompareRefinementGenerator(Identifier prevId, Variable budget) {
+            Variable var_leq = new("leq", BitType.Instance);
+            Variable var_a = new("a", this);
+            Variable var_b = new("b", this);
+
+            return new FunctionDefinition(new FunctionSignature(CompareId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
+                new VariableDeclaration(var_leq, prevId.Call(var_a.Ref(),var_b.Ref())),
+                new RepeatStatement(budget.Ref(),
+                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
+                ),
+                new ReturnStatement(var_leq.Ref())
+            );
+        }
+
+        public FunctionDefinition GetCompareReductionGenerator(Variable budget) {
+            Variable var_leq = new("leq", BitType.Instance);
+            Variable var_a = new("a", this);
+            Variable var_b = new("b", this);
+
+            return new FunctionDefinition(new FunctionSignature(CompareId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
+                new VariableDeclaration(var_leq, X.L0),
+                new RepeatStatement(budget.Ref(),
+                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
+                ),
+                new ReturnStatement(var_leq.Ref())
+            );
+        }
+
 
         public FunctionDefinition GetDisjunctGenerator() {
             Variable var_a = new("a", this);

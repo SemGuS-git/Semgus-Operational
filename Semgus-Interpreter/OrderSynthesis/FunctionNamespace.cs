@@ -27,16 +27,22 @@ namespace Semgus.OrderSynthesis {
                     return new Literal(0);
             }
 
-            if (GetInfixOpOrNull(call.Function.Name) is Op op) {
-                return new InfixOperation(op, call.Args.Select(Convert).ToList());
+            if(call.Args.Count == 1 && GetUnaryOpOrNull(call.Function.Name) is UnaryOp un_op) {
+                return new UnaryOperation(un_op,Convert(call.Args[0]));
             }
 
-            if (LibFunctions.MapSmtOrNull(call.Function.Name) is Identifier id) {
-                return new FunctionEval(id, call.Args.Select(Convert).ToList());
+            if (call.Args.Count > 1 && GetInfixOpOrNull(call.Function.Name) is Op op) {
+                return new InfixOperation(op, call.Args.Select(Convert).ToList());
             }
 
             throw new KeyNotFoundException($"Expression includes unmapped SMT function \"{call.Function.Name}\"");
         }
+
+        private static UnaryOp? GetUnaryOpOrNull(string name) => name switch {
+            "not" => UnaryOp.Not,
+            "-" => UnaryOp.Minus,
+            _ => null,
+        };
 
         private static Op? GetInfixOpOrNull(string smtFn) => smtFn switch {
             "=" => Op.Eq,

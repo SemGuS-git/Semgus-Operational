@@ -1,4 +1,3 @@
 ﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal interface IExpression : INode {
-    }
+    internal interface INode { }
 }

@@ -2,10 +2,10 @@
     internal class VoidType : IType {
         public static VoidType Instance { get; } = new();
 
-        public Identifier Id { get; } = new("void");
-        public string Name => Id.Name;
+        public static Identifier Id { get; } = new("void");
+        Identifier IType.Id => Id;
 
         private VoidType() { }
-        public override string ToString() => Name;
+        public override string ToString() => Id.ToString();
     }
 }

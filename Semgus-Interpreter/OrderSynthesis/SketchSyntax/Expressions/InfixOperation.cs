@@ -3,7 +3,9 @@
 
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
+
     internal record InfixOperation  (Op Op, IReadOnlyList<IExpression> Operands)  : IExpression  {
+
         public InfixOperation(Op op, params IExpression[] operands) : this(op, operands.ToList()) { }
 
         public override string ToString() {
