@@ -8,8 +8,8 @@
 
         IReadOnlyList<IVariableInfo> Args { get; }
 
-        FunctionSignature AsHydrated(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null);
+        FunctionSignature AsRichSignature(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null);
 
-        IFunctionSignature AsFunctional();
+        IFunctionSignature AsFunctional(out Identifier? displacedRefVarId);
     }
 }

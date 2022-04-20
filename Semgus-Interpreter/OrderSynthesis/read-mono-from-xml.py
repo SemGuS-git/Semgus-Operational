@@ -45,7 +45,7 @@ def extract(mono_lines, tree):
             out[syntax] = []
         
         u = out[syntax]
-        while len(u) <= index:
+        while len(u) <= index: # on first pass, ensure we have enough slots
             u.append('?')
         
         u[index] = "increasing" if mono_switch==0 else "decreasing" if mono_switch==1 else "none"

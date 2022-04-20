@@ -1,22 +1,27 @@
 ﻿using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.Util;
+using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal class FirstStep {
+    internal class MonotonicityStep {
 
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
 
-        public FirstStep(IReadOnlyList<StructType> structs, IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions) {
+        private IReadOnlyList<FunctionDefinition> NonMonotoneFunctions { get; }
+
+        public MonotonicityStep(IReadOnlyList<StructType> structs, IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions, IReadOnlyList<FunctionDefinition> nonMonotoneFunctions) {
             Structs = structs;
             MaybeMonotoneFunctions = maybeMonotoneFunctions;
+            NonMonotoneFunctions = nonMonotoneFunctions;
         }
 
-        public static FirstStep Extract(Semgus.Operational.InterpretationGrammar grammar) {
+        public static MonotonicityStep FromSemgusGrammar(Operational.InterpretationGrammar grammar) {
             List<Semgus.Operational.SemanticRuleInterpreter> all_sem = new();
             List<FunctionDefinition> functions = new();
-            Dictionary<Identifier, StructType> observed = new();
+            Dictionary<Identifier, StructType> observed_struct_types = new();
+            List<FunctionDefinition> non_mono = new();
 
             SemToSketchConverter converter = new();
 
@@ -33,17 +38,20 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 fn.Alias = sem.ProductionRule.ToString();
 
                 // skip constant functions, e.g. literals
-                if (sig.Args.Count == 0) continue;
+                if (sig.Args.Count == 0) {
+                    non_mono.Add(fn);
+                    continue;
+                }
 
                 functions.Add(fn);
 
-                observed.TryAdd(sig.ReturnType.Id, (StructType)sig.ReturnType);
+                observed_struct_types.TryAdd(sig.ReturnType.Id, (StructType)sig.ReturnType);
                 foreach (var arg in sig.Args) {
-                    observed.TryAdd(arg.Type.Id, (StructType)arg.Type);
+                    observed_struct_types.TryAdd(arg.Type.Id, (StructType)arg.Type);
                 }
             }
 
-            return new(observed.Values.ToList(), functions);
+            return new(observed_struct_types.Values.ToList(), functions, non_mono);
         }
 
         public IEnumerable<IStatement> GetFile() {
@@ -163,6 +171,61 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             return (input_args, input_assembly_statements);
         }
+        public record Output(IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<MonotoneLabeling> MonoFunctions, IReadOnlyList<FunctionDefinition> NonMonoFunctions);
 
+        public async Task<Output> Execute(FlexPath dir) {
+            Directory.CreateDirectory(dir.PathWin);
+            var file_in = dir.Append("input.sk");
+            var file_out = dir.Append("result.sk");
+            var file_holes = dir.Append("result.holes.xml");
+            var file_mono = dir.Append("result.mono.json");
+            var file_cmp = dir.Append("result.comparisons.sk");
+
+            System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
+            WriteSketchInputFile(file_in);
+
+            System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
+
+            var sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
+
+            if (sketch_result) {
+                Console.WriteLine($"--- [Initial] Sketch succeeded ---");
+            } else {
+                Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
+                throw new Exception("Sketch rejected");
+            }
+
+            Console.WriteLine($"--- [Initial] Extracting monotonicities ---");
+
+            var mono = await InspectMonotonicities(file_in, file_holes, file_mono);
+            Debug.Assert(mono.Count == MaybeMonotoneFunctions.Count, "Missing monotonicity labels for some functions; halting");
+
+            //await Wsl.RunPython("parse-cmp.py", file_out.PathWsl, file_cmp.PathWsl);
+
+            Console.WriteLine($"--- [Initial] Reading compare functions ---");
+
+            var compare_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), this.Structs.Select(s => s.CompareId));
+            Debug.Assert(compare_functions.Count == this.Structs.Count, "Failed to extract all comparison functions; halting");
+
+            Console.WriteLine($"--- [Initial] Transforming compare functions ---");
+
+            IReadOnlyList<FunctionDefinition> compacted = PipelineUtil.Compactify(compare_functions); // May throw
+
+            return new(compacted, mono, NonMonotoneFunctions);
+        }
+
+        private async Task<IReadOnlyList<MonotoneLabeling>> InspectMonotonicities(FlexPath file_in, FlexPath file_holes, FlexPath file_mono) {
+            await Wsl.RunPython("read-mono-from-xml.py", file_in.PathWsl, file_holes.PathWsl, file_mono.PathWsl);
+            return (await MonotoneLabeling.ExtractFromJson(this.MaybeMonotoneFunctions, file_mono.PathWin)).ToList();
+        }
+
+        private void WriteSketchInputFile(FlexPath file_in) {
+            using (StreamWriter sw = new(file_in.PathWin)) {
+                LineReceiver receiver = new(sw);
+                foreach (var a in this.GetFile()) {
+                    a.WriteInto(receiver);
+                }
+            }
+        }
     }
 }

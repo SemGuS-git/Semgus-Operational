@@ -15,6 +15,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         public Identifier DisjunctId { get; }
         public Identifier EqId { get; }
         public Identifier NonEqId { get; }
+        public Identifier BotTopValues { get; }
 
         public StructType(Identifier id, IReadOnlyList<Variable> elements) {
             this.Id = id;

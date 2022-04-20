@@ -116,7 +116,6 @@ namespace Semgus.Operational {
         public override int GetHashCode() => Name.GetHashCode();
     }
 
-
     public class InterpretationGrammar {
         public int RuleCount => Productions.ValueCount;
 

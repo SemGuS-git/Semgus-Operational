@@ -15,7 +15,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var outputs = prod.OutputVariables;
             var key = termType.Name.Name.Symbol;
 
-            if(structs_by_term_type.TryGetValue(key,out var st)) {
+            if (structs_by_term_type.TryGetValue(key, out var st)) {
 
             } else {
                 var n = structs_by_term_type.Count;

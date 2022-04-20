@@ -21,8 +21,11 @@
 
 
 
-        public FunctionSignature AsHydrated(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null) => replacement_id is null ? this : this with { Id = replacement_id };
+        public FunctionSignature AsRichSignature(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null) => replacement_id is null ? this : this with { Id = replacement_id };
 
-        public IFunctionSignature AsFunctional() => this;
+        public IFunctionSignature AsFunctional(out Identifier? displacedRefVarId) {
+            displacedRefVarId = null;
+            return this;
+        }
     }
 }

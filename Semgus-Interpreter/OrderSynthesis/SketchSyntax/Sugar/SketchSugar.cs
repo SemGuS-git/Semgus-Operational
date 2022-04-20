@@ -28,6 +28,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Sugar {
         public static AssertStatement Assert(int v) => new AssertStatement(new Literal(v));
         public static AssertStatement Assert(Variable v) => new AssertStatement(v.Ref());
         public static AssertStatement Assert(IExpression v) => new AssertStatement(v);
+        public static UnaryOperation Not(IExpression v) => new UnaryOperation(UnaryOp.Not, v);
     }
 
     internal static class ExpressionExtensions {

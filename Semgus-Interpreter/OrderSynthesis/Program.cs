@@ -1,6 +1,7 @@
 ﻿#define NOT_REUSE
 
 using Semgus.CommandLineInterface;
+using Semgus.Operational;
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
@@ -13,324 +14,182 @@ namespace Semgus.OrderSynthesis {
 
     public class Program {
 
-        record FirstResults(IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<MonotoneLabeling> MonoFunctions);
-        record RefinementResults(IReadOnlyList<FunctionDefinition> Comparisons, bool stopFlag);
-        record ReductionResults(IReadOnlyList<FunctionDefinition> Comparisons);
-
-        static async Task<Result<FirstResults>> RunFirst(FirstStep first, FlexPath dir) {
-            Directory.CreateDirectory(dir.PathWin);
-            var file_in = dir.Append("input.sk");
-            var file_out = dir.Append("result.sk");
-            var file_holes = dir.Append("result.holes.xml");
-            var file_mono = dir.Append("result.mono.json");
-            var file_cmp = dir.Append("result.comparisons.sk");
-
-#if NOT_REUSE
-            System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
-
-            using (StreamWriter sw = new(file_in.PathWin)) {
-                LineReceiver receiver = new(sw);
-                foreach (var a in first.GetFile()) {
-                    a.WriteInto(receiver);
-                }
-            }
-
-            System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
-            var sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (sketch_result) {
-                Console.WriteLine($"--- [Initial] Sketch succeeded ---");
-            } else {
-                Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
-                return Result.Err<FirstResults>("Sketch rejected");
-            }
-#endif
-            //System.Console.WriteLine($"--- parsing output code ---");
-
-            //var out_sketchy = SketchParser.WholeFile.Parse(await File.ReadAllTextAsync(file_out.PathWin));
-
-            // if(!first.IsValidOutput(out_sketchy)) throw new Exception();
-
-            Console.WriteLine($"--- [Initial] Extracting monotonicities ---");
-
-            await Wsl.RunPython("read-mono-from-xml.py", file_in.PathWsl, file_holes.PathWsl, file_mono.PathWsl);
-            var mono = await ExtractMonotonicitiesJson(first.MaybeMonotoneFunctions, file_mono.PathWin);
-            await Wsl.RunPython("parse-cmp.py", file_out.PathWsl, file_cmp.PathWsl);
-
-            Console.WriteLine($"--- [Initial] Reading compare functions ---");
-
-            //var compare_functions =
-            //    SketchParser.AnyFunctionIn(
-            //        first.Structs.Select(s => s.CompareId)
-            //    ).Many().Parse(
-            //        await File.ReadAllTextAsync(file_out.PathWin)
-            //    ).ToList();
-
-            var compare_functions = ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), first.Structs.Select(s => s.CompareId));
-
-            if (compare_functions.Count != first.Structs.Count) {
-                Console.WriteLine($"--- Failed to extract all comparison functions; halting ---");
-                return Result<FirstResults>.Err("Comparison extraction failed");
-            }
-
-            Console.WriteLine($"--- [Initial] Transforming compare functions ---");
-
-            IReadOnlyList<FunctionDefinition> compacted;
-            try {
-                compacted = Compactify(compare_functions);
-            } catch (Exception ex) {
-                Console.WriteLine($"--- Failed to transform all comparison functions; halting ---");
-                return Result<FirstResults>.Err("Comparison transform failed");
-            }
-
-            return Result.Ok(new FirstResults(compacted, mono));
-        }
-
-        static IReadOnlyList<FunctionDefinition> ReadSelectedFunctions(string text, IEnumerable<Identifier> targets) {
-            var indexMap = targets.Select((t, i) => (t, i)).ToDictionary(u => u.t, u => u.i);
-            var raw = SketchParser.WholeFile.Parse(text).Contents.Where(st => st is FunctionDefinition fd && targets.Contains(fd.Id)).Cast<FunctionDefinition>();
-
-            var ordered = new FunctionDefinition[indexMap.Count];
-
-            foreach(var fd in raw) {
-                ordered[indexMap.Remove(fd.Id,out var idx) ? idx : throw new KeyNotFoundException()] = fd;
-            }
-
-            if(indexMap.Count != 0) {
-                throw new KeyNotFoundException();
-            }
-            return ordered;
-        }
-
-        static FunctionDefinition Compactify(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
-            var x = SymbolicInterpreter.Evaluate(function, available);
-
-            var out_val = x.RefVariables[new("_out")];
-
-            var norm_1 = BitTernaryFlattener.Normalize(out_val);
-
-            return new FunctionDefinition(function.Signature.AsFunctional(), new ReturnStatement(norm_1));
-            //var norm_2 = NegationNormalForm.Normalize(norm_1);
-            //var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
-        }
-
-        static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, params FunctionDefinition[] available) => Compactify(input, (IEnumerable<FunctionDefinition>)available);
-
-        static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, IEnumerable<FunctionDefinition> available) {
-            var functionMap = available.ToDictionary(k => k.Id);
-            return input.Select(fn => Compactify(fn, functionMap)).ToList();
-        }
-
-        static async Task<Result<RefinementResults>> RunRefinement(int iter, OrderRefinementStep data, FlexPath dir) {
-            Directory.CreateDirectory(dir.PathWin);
-
-            var file_in = dir.Append("input.sk");
-            var file_out = dir.Append("result.sk");
-            var file_holes = dir.Append("result.holes.xml");
-            //var file_cmp = dir.Append("result.comparisons.sk");
-
-
-            System.Console.WriteLine($"--- [Refinement {iter}] Writing input file at {file_in} ---");
-
-            using (StreamWriter sw = new(file_in.PathWin)) {
-                LineReceiver receiver = new(sw);
-                foreach (var a in data.GetFile()) {
-                    a.WriteInto(receiver);
-                }
-            }
-
-            System.Console.WriteLine($"--- [Refinement {iter}] Invoking Sketch on {file_in} ---");
-
-            var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (step2_sketch_result) {
-                Console.WriteLine($"--- [Refinement {iter}] Sketch succeeded ---");
-            } else {
-                Console.WriteLine($"--- [Refinement {iter}] Sketch rejected; done with refinement ---");
-                return Result<RefinementResults>.Ok(new(null, true));
-            }
-
-            //System.Console.WriteLine($"--- 2 parsing output code ---");
-
-            //var step2_out_code = SketchParser.WholeFile.Parse(await File.ReadAllTextAsync(file_out.PathWin));
-
-            //System.Console.WriteLine($"--- 2 starting fact extraction ---");
-
-            //await Wsl.RunPython("parse-cmp.py", file_out.PathWsl, file_cmp.PathWsl);
-
-            Console.WriteLine($"--- [Refinement {iter}] Reading compare functions ---");
-
-            var compare_ids = data.Structs.Select(s => s.CompareId).ToList();
-
-            var extraction_targets = compare_ids.Concat(data.PrevComparisons.Select(p => p.Id));
-            IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();
-            try {
-                extracted_functions = ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);
-            } catch (Exception ex) {
-                Console.WriteLine($"--- [Refinement {iter}] Failed to extract all comparison functions; halting ---");
-                return Result<RefinementResults>.Err("Comparison extraction failed");
-            }
-
-            Console.WriteLine($"--- [Refinement {iter}] Transforming compare functions ---");
-
-            IReadOnlyList<FunctionDefinition> compacted;
-            try {
-                compacted = Compactify(extracted_functions.Where(f=>compare_ids.Contains(f.Id)).ToList(), data.PrevComparisons);
-            } catch (Exception ex) {
-                Console.WriteLine($"--- Failed to transform all comparison functions; halting ---");
-                return Result<RefinementResults>.Err("Comparison transform failed");
-            }
-
-
-            return Result<RefinementResults>.Ok(new(compacted,false));
-            //var cmp_file_content = SketchParser.WholeFile.Parse(await File.ReadAllTextAsync(file_cmp.PathWin));
-
-            //if (ExtractCompares(cmp_file_content, data.Structs).TryUnwrap(out var compare_bodies)) {
-            //    return Result.Ok(compare_bodies!);
-            //} else {
-            //    Console.WriteLine($"--- Failed to extract all comparison functions; halting ---");
-            //    return Result<IReadOnlyList<FunctionDefinition>>.Err("Comparison extraction failed");
-            //}
-        }
-
-        static async Task<Result<ReductionResults>> RunReduction(ReductionStep data, FlexPath dir) {
-            Directory.CreateDirectory(dir.PathWin);
-
-            var file_in = dir.Append("input.sk");
-            var file_out = dir.Append("result.sk");
-            var file_holes = dir.Append("result.holes.xml");
-            //var file_cmp = dir.Append("result.comparisons.sk");
-
-            System.Console.WriteLine($"--- [Reduction] Writing input file at {file_in} ---");
-
-            using (StreamWriter sw = new(file_in.PathWin)) {
-                LineReceiver receiver = new(sw);
-                foreach (var a in data.GetFile()) {
-                    a.WriteInto(receiver);
-                }
-            }
-
-            System.Console.WriteLine($"--- [Reduction] Invoking Sketch on {file_in} ---");
-
-            var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (step2_sketch_result) {
-                Console.WriteLine($"--- [Reduction] Sketch succeeded ---");
-            } else {
-                Console.WriteLine($"--- [Reduction] Sketch rejected; reduction failed ---");
-                return Result<ReductionResults>.Err("Sketch rejected");
-            }
-
-            Console.WriteLine($"--- [Reduction] Reading compare functions ---");
-
-            var compare_ids = data.Structs.Select(s => s.CompareId).ToList();
-
-            var extraction_targets = compare_ids.Concat(data.PrevComparisons.Select(p => p.Id));
-            IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();
-            try {
-                extracted_functions = ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);
-            }
-            catch (Exception ex) {
-                Console.WriteLine($"--- [Reduction] Failed to extract all comparison functions ---");
-                return Result<ReductionResults>.Err("Comparison extraction failed");
-            }
-
-            Console.WriteLine($"--- [Reduction] Transforming compare functions ---");
-
-            IReadOnlyList<FunctionDefinition> compacted;
-            try {
-                compacted = Compactify(extracted_functions.Where(f => compare_ids.Contains(f.Id)).ToList(), data.PrevComparisons);
-            } catch (Exception ex) {
-                Console.WriteLine($"--- [Reduction] Failed to transform all comparison functions; halting ---");
-                return Result<ReductionResults>.Err("Comparison transform failed");
-            }
-
-
-            return Result<ReductionResults>.Ok(new(compacted));
-        }
-
         static async Task Main(string[] args) {
             var file = args[0];
 
             Debug.Assert(File.Exists(file), "Missing input file {0}", file);
 
             FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{Path.GetFileName(file)}/");
-#if NOT_REUSE
 
+            var result = await RunPipeline(dir, file);
+
+        }
+
+        static async Task<PipelineState> RunPipeline(FlexPath dir, string input_file) {
             if (Directory.Exists(dir.PathWin)) {
                 Directory.Delete(dir.PathWin, true);
             }
             Directory.CreateDirectory(dir.PathWin);
-#endif
 
-            FlexPath dir_step1 = dir.Append("first/");
+            PipelineState? state = null;
 
-            var items = ParseUtil.TypicalItems.Acquire(file);
+            try {
+                {
+                    var items = ParseUtil.TypicalItems.Acquire(input_file); // May throw
 
-            var first = FirstStep.Extract(items.Grammar);
+                    var step = MonotonicityStep.FromSemgusGrammar(items.Grammar); // May throw
 
-            IReadOnlyList<FunctionDefinition> comparisons;
-            IReadOnlyList<FunctionDefinition> prev_compare = Array.Empty<FunctionDefinition>();
-            IReadOnlyList<MonotoneLabeling> mono;
-            {
-                if ((await RunFirst(first, dir_step1)).TryUnwrap(out var tu)) {
-                    (comparisons, mono) = tu!;
-                } else {
-                    return;
+                    state = new(PipelineState.Step.Initial, LibFunctions.PrimTypes.Concat(step.Structs).ToDictionary(s => s.Id), step.Structs);
+
+                    var result = await step.Execute(dir.Append("step_1_mono/")); // May throw
+
+                    state = state with {
+                        Reached = PipelineState.Step.Monotonicity,
+                        Comparisons = result.Comparisons,
+                        MonotoneFunctions = result.MonoFunctions,
+                        AllMonotonicities = result.MonoFunctions.Concat(result.NonMonoFunctions.Select(MonotoneLabeling.None)).ToList()
+                    };
                 }
-            }
 
-            Dictionary<Identifier, IType> type_map = LibFunctions.PrimTypes.Concat(first.Structs).ToDictionary(s => s.Id);
-            const int MAX_REFINEMENT_STEPS = 100;
-
-            int i = 0;
-            for ( ; i < MAX_REFINEMENT_STEPS; i++) {
-                prev_compare = comparisons
-                    .Select(c => c with { Signature = c.Signature.AsHydrated(type_map, new("prev_" + c.Id.Name)) })
-                    .ToList();
-
-                var refinement_step = new OrderRefinementStep(first.Structs, mono, prev_compare);
-
-                var dir_refinement = dir.Append($"refine_{i}/");
-                if ((await RunRefinement(i, refinement_step, dir_refinement)).TryUnwrap(out var result)) {
-                    if(result.stopFlag) {
-                        break;
-                    } else {
-                        comparisons = result.Comparisons;
-                    }
-                } else {
-                    return;
+                {
+                    var result = await OrderExpansionStep.ExecuteLoop(dir.Append("step_2_expand/"), state); // May throw
+                    state = state with { Reached = PipelineState.Step.OrderExpansion, Comparisons = result.Comparisons };
                 }
-            }
 
-            var last = new ReductionStep(first.Structs, prev_compare);
+                try {
 
+                    var step = new SimplificationStep(state.Structs, state.Comparisons);
+                    var result = await step.Execute(dir.Append("step_3_simplify/"));
+                    state = state with { Reached = PipelineState.Step.Simplification, Comparisons = result.Comparisons };
 
-            {
-                FlexPath dir_reduce = dir.Append("reduce/");
-                if ((await RunReduction(last, dir_reduce)).TryUnwrap(out var result3)) {
-                    comparisons = result3.Comparisons;
-                } else {
+                } catch (Exception e) {
                     // Don't treat this as a hard stop
+                    Console.Error.Write(e);
+                    Console.Error.Write("Continuing");
                 }
+
+                {
+                    var step = new LatticeStep(state.Structs.Zip(state.Comparisons!));
+                    var result = await step.Execute(dir.Append("step_4_lattice/"));
+                    state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };
+                }
+
+
+                // TODO: load compares and monotonicities into abstract interpretation framework
+                await WriteState(dir.Append("result/"), state);
+
+                Console.WriteLine("--- Pipeline finished ---");
+                return state;
+            } catch (Exception e) {
+                Console.Error.Write(e);
+                Console.Error.Write("Halting");
+                if (state is not null) await WriteState(dir.Append("incomplete_result/"), state);
+                throw;
             }
 
-
-
-            // TODO: load compares and monotonicities into abstract interpretation framework
-
-            Console.ReadKey();
         }
 
-        private static async Task<IReadOnlyList<MonotoneLabeling>> ExtractMonotonicitiesJson(IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions, string fname) {
-            using var fs = File.OpenRead(fname);
+        record MonoOutputLine(string Alias, IReadOnlyList<Monotonicity> Labels);
 
-            var obj = await JsonSerializer.DeserializeAsync<IReadOnlyDictionary<string, IReadOnlyList<string>>>(fs);
+        static async Task WriteState(FlexPath path, PipelineState state) {
+            File.WriteAllText(path.Append("step_reached.txt").PathWin, state.Reached.ToString());
 
-            Debug.Assert(obj.Count == maybeMonotoneFunctions.Count);
+            if (state.Comparisons is not null) {
+                PipelineUtil.WriteSketchFile(path.Append("comparisons.sk"), state.Comparisons);
+            }
+            if (state.AllMonotonicities is not null) {
+                var obj = new SortedDictionary<string, MonoOutputLine>();
+                foreach (var a in state.AllMonotonicities) {
+                    obj.Add(a.Function.Id.ToString(), new(a.Function.Alias!, a.ArgMonotonicities));
+                }
+                using var fs = File.OpenRead(path.Append("monotonicities.json").PathWin);
 
-            return maybeMonotoneFunctions.Select(fn => new MonotoneLabeling(fn, obj[fn.Id.Name].Select(s => Enum.Parse<Monotonicity>(s, true)).ToList())).ToList();
+                await JsonSerializer.SerializeAsync(fs, obj);
+            }
+            if (state.Lattices is not null) {
+                PipelineUtil.WriteSketchFile(path.Append("lattices.sk"), state.Lattices.SelectMany(l => l.GetEach()));
+            }
+        }
+    }
+
+    internal static class PipelineUtil {
+        public static void WriteSketchFile(FlexPath path, IEnumerable<IStatement> content) {
+            using StreamWriter sw = new(path.PathWin);
+            LineReceiver receiver = new(sw);
+
+            foreach (var a in content) {
+                a.WriteInto(receiver);
+            }
         }
 
+        public static IReadOnlyList<FunctionDefinition> ReadSelectedFunctions(string text, IEnumerable<Identifier> targets) {
+            var indexMap = targets.Select((t, i) => (t, i)).ToDictionary(u => u.t, u => u.i);
+            var raw = SketchParser.WholeFile.Parse(text).Contents.Where(st => st is FunctionDefinition fd && targets.Contains(fd.Id)).Cast<FunctionDefinition>();
+
+            var ordered = new FunctionDefinition[indexMap.Count];
+
+            foreach (var fd in raw) {
+                ordered[indexMap.Remove(fd.Id, out var idx) ? idx : throw new KeyNotFoundException()] = fd;
+            }
+
+            if (indexMap.Count != 0) {
+                throw new KeyNotFoundException();
+            }
+            return ordered;
+        }
+
+        // note: this doesn't work for return statements in inner scopes.
+        public static FunctionDefinition SloppyFunctionalize(FunctionDefinition function) {
+            var sig_functional = function.Signature.AsFunctional(out var refVarId);
+
+            if (refVarId is null) {
+                return function;
+            }
+
+            // Declare the out variable at the start, and then insert it into all return statements
+
+            var adjusted = function.Body.Select(stmt => stmt is ReturnStatement ? new ReturnStatement(new VariableRef(refVarId)) : stmt);
+
+            adjusted = adjusted.Prepend(new WeakVariableDeclaration(sig_functional.ReturnTypeId, refVarId));
+
+
+            return new FunctionDefinition(sig_functional, adjusted.ToList());
+        }
+
+
+        public static FunctionDefinition Compactify(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
+            var (sig_functional, raw_output) = CompactifyInner(function, available);
+
+            var norm_1 = BitTernaryFlattener.Normalize(raw_output);
+
+            return new FunctionDefinition(sig_functional, new ReturnStatement(norm_1));
+
+            //var norm_2 = NegationNormalForm.Normalize(norm_1);
+            //var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
+        }
+
+        private static (IFunctionSignature, IExpression) CompactifyInner(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
+            var sig_functional = function.Signature.AsFunctional(out var refVarId);
+            var eval_result = SymbolicInterpreter.Evaluate(function, available);
+
+            IExpression raw_output;
+
+            if (refVarId is null) {
+                Debug.Assert(function.Signature.ReturnTypeId != VoidType.Id);
+                Debug.Assert(eval_result.ReturnValue is not Empty);
+                raw_output = eval_result.ReturnValue;
+            } else {
+                raw_output = eval_result.RefVariables[refVarId];
+            }
+
+            return (sig_functional, raw_output);
+        }
+
+        public static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, params FunctionDefinition[] available) => Compactify(input, (IEnumerable<FunctionDefinition>)available);
+
+        public static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, IEnumerable<FunctionDefinition> available) {
+            var functionMap = available.ToDictionary(k => k.Id);
+            return input.Select(fn => Compactify(fn, functionMap)).ToList();
+        }
     }
 }

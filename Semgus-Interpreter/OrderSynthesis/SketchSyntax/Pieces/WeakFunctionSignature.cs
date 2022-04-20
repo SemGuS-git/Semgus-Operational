@@ -13,14 +13,22 @@
             Args.SequenceEqual(other.Args);
 
 
-        public IFunctionSignature AsFunctional() {
+        public IFunctionSignature AsFunctional(out Identifier? displacedRefVarId) {
             if (ReturnTypeId == VoidType.Id) {
                 List<IVariableInfo> new_args = new();
+                
                 Identifier return_type_id = VoidType.Id;
+                Identifier? return_var_id = null;
+
+                bool found = false;
+
+
                 foreach(var arg in Args) {
                     if(arg is RefVariableDeclaration r) {
-                        if(return_type_id == VoidType.Id) {
+                        if(!found) {
                             return_type_id = arg.TypeId;
+                            return_var_id = arg.Id;
+                            found = true;
                         } else {
                             throw new InvalidOperationException();
                         }
@@ -28,18 +36,22 @@
                         new_args.Add(arg);
                     }
                 }
-                if (return_type_id == VoidType.Id) {
-                    return this;
-                } else {
+
+                if(found) {
+                    displacedRefVarId = return_var_id;
                     return this with { ReturnTypeId = return_type_id, Args = new_args, ImplementsId = this.ImplementsId };
+                } else {
+                    displacedRefVarId = null;
+                    return this;
                 }
             } else if (Args.Any(a => a is RefVariableDeclaration)) {
                  throw new InvalidOperationException();
             } else {
+                displacedRefVarId = null;
                 return this;
             }
         }
-        public FunctionSignature AsHydrated(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null) 
+        public FunctionSignature AsRichSignature(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null) 
             => new(
                 Flag,
                 typeDict[ReturnTypeId],

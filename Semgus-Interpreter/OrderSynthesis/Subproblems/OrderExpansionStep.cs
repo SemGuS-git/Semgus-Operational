@@ -3,13 +3,15 @@ using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.Util;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal class OrderRefinementStep {
+    internal class OrderExpansionStep {
+        public int Iter { get; }
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyList<MonotoneLabeling> MonotoneFunctions { get; }
         public IReadOnlyList<FunctionDefinition> PrevComparisons { get; }
         public IReadOnlyList<Variable> Budgets { get; private set; }
 
-        public OrderRefinementStep(IReadOnlyList<StructType> structs, IReadOnlyList<MonotoneLabeling> monotoneFunctions, IReadOnlyList<FunctionDefinition> prevComparisons) {
+        public OrderExpansionStep(int iter, IReadOnlyList<StructType> structs, IReadOnlyList<MonotoneLabeling> monotoneFunctions, IReadOnlyList<FunctionDefinition> prevComparisons) {
+            Iter = iter;
             Structs = structs;
             MonotoneFunctions = monotoneFunctions;
             PrevComparisons = prevComparisons;
@@ -22,7 +24,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public IEnumerable<IStatement> GetFile() {
-            foreach(var b in Budgets) {
+            foreach (var b in Budgets) {
                 yield return b.Declare(new Hole());
             }
 
@@ -52,7 +54,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             List<IStatement> body = new();
 
-            var (input_args, input_assembly_statements) = FirstStep.GetMainInitContent(clasps.SelectMany(c => c.Indexed.Append(c.Alternate)).ToList());
+            var (input_args, input_assembly_statements) = MonotonicityStep.GetMainInitContent(clasps.SelectMany(c => c.Indexed.Append(c.Alternate)).ToList());
 
             body.AddRange(input_assembly_statements);
 
@@ -145,6 +147,82 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         break;
                 }
             }
+        }
+        public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
+        public static async Task<Output> ExecuteLoop(FlexPath dir, PipelineState state) {
+            var comparisons = state.Comparisons ?? throw new NullReferenceException();
+            IReadOnlyList<FunctionDefinition> prev_compare = Array.Empty<FunctionDefinition>();
+
+            const int MAX_REFINEMENT_STEPS = 100;
+
+            int i = 0;
+            for (; i < MAX_REFINEMENT_STEPS; i++) {
+                prev_compare = comparisons
+                    .Select(c => c with { Signature = c.Signature.AsRichSignature(state.TypeMap, new("prev_" + c.Id.Name)) })
+                    .ToList();
+
+                var refinement_step = new OrderExpansionStep(i, state.Structs, state.MonotoneFunctions, prev_compare);
+
+                var dir_refinement = dir.Append($"iter_{i}/");
+
+                (var result, var stopFlag) = await refinement_step.Execute(dir_refinement); // May throw
+                if (stopFlag) break;
+                comparisons = result.Comparisons;
+            }
+
+            return new(prev_compare);
+        }
+        public async Task<(Output output, bool stopFlag)> Execute(FlexPath dir) {
+            Directory.CreateDirectory(dir.PathWin);
+
+            var file_in = dir.Append("input.sk");
+            var file_out = dir.Append("result.sk");
+            var file_holes = dir.Append("result.holes.xml");
+
+            System.Console.WriteLine($"--- [Refinement {Iter}] Writing input file at {file_in} ---");
+
+            using (StreamWriter sw = new(file_in.PathWin)) {
+                LineReceiver receiver = new(sw);
+                foreach (var a in this.GetFile()) {
+                    a.WriteInto(receiver);
+                }
+            }
+
+            System.Console.WriteLine($"--- [Refinement {Iter}] Invoking Sketch on {file_in} ---");
+
+            var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
+
+            if (step2_sketch_result) {
+                Console.WriteLine($"--- [Refinement {Iter}] Sketch succeeded ---");
+            } else {
+                Console.WriteLine($"--- [Refinement {Iter}] Sketch rejected; done with refinement ---");
+                return (new(Array.Empty<FunctionDefinition>()), true);
+            }
+
+            Console.WriteLine($"--- [Refinement {Iter}] Reading compare functions ---");
+
+            var compare_ids = this.Structs.Select(s => s.CompareId).ToList();
+
+            var extraction_targets = compare_ids.Concat(this.PrevComparisons.Select(p => p.Id));
+            IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();
+            try {
+                extracted_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);
+            } catch (Exception) {
+                Console.WriteLine($"--- [Refinement {Iter}] Failed to extract all comparison functions; halting ---");
+                throw;
+            }
+
+            Console.WriteLine($"--- [Refinement {Iter}] Transforming compare functions ---");
+
+            IReadOnlyList<FunctionDefinition> compacted;
+            try {
+                compacted = PipelineUtil.Compactify(extracted_functions.Where(f => compare_ids.Contains(f.Id)).ToList(), this.PrevComparisons);
+            } catch (Exception) {
+                Console.WriteLine($"--- Failed to transform all comparison functions; halting ---");
+                throw;
+            }
+
+            return (new(compacted), false);
         }
     }
 }

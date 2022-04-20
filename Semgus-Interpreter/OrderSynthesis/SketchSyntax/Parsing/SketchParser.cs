@@ -4,6 +4,180 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Semgus.SketchLang.Tests")]
 namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
 
+    internal static class DiyLexer {
+        //class Bus {
+        //    private readonly string _inner;
+
+        //    private readonly int _length;
+        //    private int _cursor;
+
+        //    public Bus(string inner) {
+        //        _inner = inner;
+        //        _length = inner.Length;
+        //        _cursor = -1;
+        //    }
+
+        //    public bool MoveNext() => ++_cursor < _length;
+
+        //    public char Peek() => _inner[_cursor];
+        //    public char Peek(int index) => _inner[_cursor + index];
+        //}
+
+        //struct LongerToken {
+        //    public char[] value;
+        //}
+
+        //struct CharToken {
+        //    public char value;
+        //}
+
+        //enum Token {
+        //    Invalid,
+
+        //    Comma,
+        //    Semicolon,
+
+        //    ParenOpen,
+        //    ParenClose,
+        //    BraceOpen,
+        //    BraceClose,
+
+        //    Bang,
+        //    Minus,
+        //    Plus,
+        //    Times,
+        //    Slash,
+
+        //    Dot,
+
+        //    Eq,
+        //    Neq,
+
+        //    Lt,
+        //    Gt,
+        //    Leq,
+        //    Geq,
+
+
+        //    SingleQuestion,
+        //    Colon,
+
+        //    DoubleQuestion,
+
+        //    DoubleAnd,
+        //    DoubleOr,
+        //    DoubleEq,
+
+        //    DoubleSlash,
+        //    SlashStar,
+
+        //    Keyword,
+        //    Identifier,
+
+        //    RawIdentifier,
+        //    Number
+        //}
+        //static string Str(Token t) => t switch {
+        //    Comma,
+        //    Semicolon,
+
+        //    ParenOpen,
+        //    ParenClose,
+        //    BraceOpen,
+        //    BraceClose,
+
+        //    Bang,
+        //    Minus,
+        //    Plus,
+        //    Times,
+
+        //    Dot,
+
+        //    Eq,
+        //    Neq,
+
+        //    Lt,
+        //    Gt,
+        //    Leq,
+        //    Geq,
+
+
+        //    SingleQuestion,
+        //    Colon,
+
+        //    DoubleQuestion,
+
+        //    DoubleAnd,
+        //    DoubleOr,
+        //    DoubleEq,
+
+        //    DoubleSlash,
+        //    SlashStar,
+        //    StarSlash,
+
+        //    RawIdentifier,
+        //    Number
+        //}
+
+
+        class Trie {
+            public Token value;
+            public Dictionary<char, Trie> children;
+
+            public Trie(Token value) {
+                this.value = value;
+            }
+
+            void Put(string s, Token value) {
+                Trie now = this;
+                for (int i = 0; i < s.Length - 1; i++) {
+                    if (now.children is null) {
+                        now.children = new();
+                        now = new(Token.Invalid);
+                        now.children.Add(s[i], now);
+                    } else if (children.TryGetValue(s[i], out var ch)) {
+                        now = ch;
+                    } else {
+                        now = new(Token.Invalid);
+                        now.children.Add(s[i], now);
+                    }
+                }
+            }
+        }
+
+
+
+        IEnumerable<Token> Scan(string value) {
+            var bus = new Bus(value);
+
+            while (bus.MoveNext()) {
+
+                char.MaxValue
+
+            }
+
+        }
+    }
+    internal static class Parser2 {
+        enum Token {
+        }
+
+        static void A() {
+            Parser<Token> Tokens = null;
+
+            Tokens.
+        }
+
+        protected internal virtual Parser<string> RawIdentifier =>
+            from identifier in Parse.Identifier(Parse.Letter, Parse.LetterOrDigit.Or(Parse.Char('_')))
+            where !ApexKeywords.ReservedWords.Contains(identifier)
+            select identifier;
+
+        protected internal virtual Parser<string> Identifier =>
+            RawIdentifier.Token().Named("Identifier");
+    }
+
+
     internal static class SketchParser {
         static class Keywords {
             public const string Struct = "struct";
@@ -51,7 +225,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 select new string(first.Concat(rest).ToArray());
             Identifier = IdentifierOrKeyword.Isol().Where(Keywords.IsNotKeyword).Select(s => new Identifier(s));
 
-            Zero = Parse.Char('0').Then(_=>Parse.LetterOrDigit.Not()).Return(0);
+            Zero = Parse.Char('0').Then(_ => Parse.LetterOrDigit.Not()).Return(0);
 
             NonZeroNumeral = Parse.Chars("123456789");
             Numeral = Parse.Chars("0123456789");
@@ -92,7 +266,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                 from v in (
                     from e in Expression
                     where e is VariableRef v
-                    select (VariableRef) e
+                    select (VariableRef)e
                 )
                 from expr in (
                     Parse.Char('=').Isol().Then(_ => Expression)
@@ -129,7 +303,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
                     from id in Identifier
                     select id
                 ).Optional()
-                select new WeakFunctionSignature(modifier, type, name, args.ToList()) { ImplementsId = maybe_impl.GetOrDefault()};
+                select new WeakFunctionSignature(modifier, type, name, args.ToList()) { ImplementsId = maybe_impl.GetOrDefault() };
 
 
             ProceduralBlock =
@@ -215,10 +389,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Parsing {
 
 
 
-            IEnumerable<T> SortToDisambiguate<T>(IEnumerable<T> values,Func<T,string> stringify) {
+            IEnumerable<T> SortToDisambiguate<T>(IEnumerable<T> values, Func<T, string> stringify) {
                 var d = values.ToDictionary(stringify);
                 var strs = d.Keys.ToList();
-                strs.Sort((string a, string b) => a.StartsWith(b) ? -1 :b.StartsWith(a)? 1 : 0);
+                strs.Sort((string a, string b) => a.StartsWith(b) ? -1 : b.StartsWith(a) ? 1 : 0);
                 return strs.Select(s => d[s]);
             }
 
