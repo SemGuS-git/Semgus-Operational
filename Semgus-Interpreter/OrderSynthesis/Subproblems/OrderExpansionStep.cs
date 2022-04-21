@@ -1,4 +1,5 @@
-﻿using Semgus.OrderSynthesis.SketchSyntax;
+﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.Util;
 
@@ -58,12 +59,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.AddRange(input_assembly_statements);
 
-            body.Add(new LineComment("Check partial equality properties", 2));
+            body.Add(new Annotation("Check partial equality properties", 2));
             foreach (var c in clasps) {
                 body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0], c.Indexed[1], c.Indexed[2]));
             }
 
-            body.Add(new LineComment("Monotonicity", 2));
+            body.Add(new Annotation("Monotonicity", 2));
 
             var claspMap = clasps.ToDictionary(v => v.Type.Id);
             foreach (var fn in MonotoneFunctions) {
@@ -117,17 +118,17 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 }
             }
 
-            yield return new LineComment($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
+            yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
 
             for (int i = 0; i < sig.Args.Count; i++) {
                 if (sig.Args[i].Type is not StructType type_i) throw new NotSupportedException();
 
 
                 if (labels[i] == Monotonicity.None) {
-                    yield return new LineComment($"Argument {i}: no monotonicity");
+                    yield return new Annotation($"Argument {i}: no monotonicity");
                     continue;
                 }
-                yield return new LineComment($"Argument {i}: {labels[i]}");
+                yield return new Annotation($"Argument {i}: {labels[i]}");
 
                 var alt_i = clasps[type_i.Id].Alternate;
 

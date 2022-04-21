@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
 
     internal record FunctionDefinition (IFunctionSignature Signature, IReadOnlyList<IStatement> Body)  : IStatement  {
         public string? Alias { get; set; } = null;

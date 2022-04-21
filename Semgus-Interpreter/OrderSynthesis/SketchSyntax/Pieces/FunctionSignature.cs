@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal record FunctionSignature  (FunctionModifier Flag, IType ReturnType, Identifier Id,IReadOnlyList<Variable> Args)  : IFunctionSignature  {
 
         public Identifier ReturnTypeId => ReturnType.Id;

@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal class VoidType : IType {
         public static VoidType Instance { get; } = new();
 

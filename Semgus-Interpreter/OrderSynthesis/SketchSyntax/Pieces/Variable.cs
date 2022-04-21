@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal record Variable (Identifier Id, IType Type)  : IVariableInfo  {
         public Identifier TypeId => Type.Id;
 

@@ -1,5 +1,12 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal record Literal  (int Value)  : IExpression {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
+    internal struct Literal : IExpression {
+        public int Value { get; }
+        
+        public Literal(int value) {
+            Value = value;
+        }
 
         public Literal(object boxedValue) : this(boxedValue switch {
             bool b => b ? 1 : 0,

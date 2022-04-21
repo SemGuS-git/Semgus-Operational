@@ -1,4 +1,5 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
@@ -8,6 +9,7 @@ using System.Linq;
 namespace Semgus.SketchLang.Tests {
     [TestClass]
     public class ParserIntegrationTests {
+        static SketchSyntaxParser SketchParser = SketchSyntaxParser.Instance;
         const string FRAG1 = @"
 
 harness void main (int Out_0_s0_v0, int Out_0_s1_v0) {
@@ -548,6 +550,43 @@ void _main (int Out_0_s0_v0, int Out_0_s1_v0, int Out_0_s2_v0, int Out_0_alt_v0,
   assert (_pac_sc_s54); //Assert at ord-max..exp.sl.sk:206 (0)
 }
 ";
+        const string GENERATED_FRAGMENT2 = @"
+void partial() {
+  _pac_sc_s38 = !(_pac_sc_s38_s40);
+  if(!(_pac_sc_s38))/*ord-max..exp.sl.sk:193*/
+  {
+    bit _pac_sc_s38_s42 = 0;
+    compare_Out_1(Out_1_s1, Out_1_s2, _pac_sc_s38_s42);
+    _pac_sc_s38 = !(_pac_sc_s38_s42);
+  }
+  bit _pac_sc_s37 = _pac_sc_s38;
+  if(!(_pac_sc_s38))/*ord-max..exp.sl.sk:193*/
+  {
+    bit _pac_sc_s37_s44 = 0;
+    compare_Out_1(Out_1_s0, Out_1_s2, _pac_sc_s37_s44);
+    _pac_sc_s37 = _pac_sc_s37_s44;
+  }
+  assert (_pac_sc_s37); //Assert at ord-max..exp.sl.sk:193 (0)
+  bit _pac_sc_s54_s56 = 0;
+  compare_In_0(In_0_s0, In_0_alt, _pac_sc_s54_s56);
+  bit _pac_sc_s54;
+  _pac_sc_s54 = !(_pac_sc_s54_s56);
+  if(!(_pac_sc_s54))/*ord-max..exp.sl.sk:206*/
+  {
+    Out_0@ANONYMOUS _pac_sc_s54_s58 = null;
+    lang_f0(In_0_alt, _pac_sc_s54_s58);
+    Out_0@ANONYMOUS _pac_sc_s54_s60 = null;
+    lang_f0(In_0_s0, _pac_sc_s54_s60);
+    bit _pac_sc_s54_s62 = 0;
+    compare_Out_0(_pac_sc_s54_s58, _pac_sc_s54_s60, _pac_sc_s54_s62)//{};
+    _pac_sc_s54 = _pac_sc_s54_s62;
+  }
+  assert (_pac_sc_s54); //Assert at ord-max..exp.sl.sk:206 (0)
+  bit _pac_sc_s72_s74 = 0;
+  compare_In_0(In_0_s0, In_0_alt, _pac_sc_s72_s74);
+}
+";
+
         [TestMethod]
         public void CanParseMain() {
             var main = SketchParser.FunctionDefinition.Parse(SOME_MAIN);
@@ -558,6 +597,13 @@ void _main (int Out_0_s0_v0, int Out_0_s1_v0, int Out_0_s2_v0, int Out_0_alt_v0,
         }
         [TestMethod]
         public void CanParseFrag1() {
+            var main = SketchParser.FunctionDefinition.Parse(FRAG1);
+            Assert.IsTrue(main != null);
+            Assert.AreEqual(2, main.Signature.Args.Count);
+            Assert.AreEqual(2, main.Body.Count);
+        }
+        [TestMethod]
+        public void CanParseFrag2() {
             var main = SketchParser.FunctionDefinition.Parse(FRAG1);
             Assert.IsTrue(main != null);
             Assert.AreEqual(2, main.Signature.Args.Count);
@@ -575,27 +621,27 @@ void _main (int Out_0_s0_v0, int Out_0_s1_v0, int Out_0_s2_v0, int Out_0_alt_v0,
             Assert.IsTrue(main != null);
             Assert.IsTrue(main.Body.Count > 100);
         }
+        //[TestMethod]
+        //public void GeneratedFragment1() {
+        //    var ll = SketchParser.ProceduralBlock.Parse(GENERATED_FRAGMENT1).ToList();
+        //    Assert.AreEqual(4, ll.Count);
+        //    Assert.IsTrue(ll[0] is WeakVariableDeclaration);
+
+        //    Assert.AreEqual(
+        //        new VariableRef(new("_pac_sc_s54")).Assign(
+        //            UnaryOp.Not.Of(
+        //                new VariableRef(new("_pac_sc_s54_s56"))
+        //            )
+        //        ),
+        //        ll[1]
+        //    );
+
+        //    Assert.IsTrue(ll[2] is IfStatement);
+        //    Assert.AreEqual(7, ((IfStatement)ll[2]).BodyLhs.Count);
+        //}
+
         [TestMethod]
-        public void GeneratedFragment1() {
-            var ll = SketchParser.ProceduralBlock.Parse(GENERATED_FRAGMENT1).ToList();
-            Assert.AreEqual(4, ll.Count);
-            Assert.IsTrue(ll[0] is WeakVariableDeclaration);
-
-            Assert.AreEqual(
-                new VariableRef(new("_pac_sc_s54")).Assign(
-                    UnaryOp.Not.Of(
-                        new VariableRef(new("_pac_sc_s54_s56"))
-                    )
-                ),
-                ll[1]
-            );
-
-            Assert.IsTrue(ll[2] is IfStatement);
-            Assert.AreEqual(7, ((IfStatement)ll[2]).BodyLhs.Count);
-        }
-
-        [TestMethod]
-        public void TimeNumber() {
+        public void FileWithHeaderFooter() {
 
             const string a = @"
 SKETCH version 1.7.6
@@ -607,8 +653,13 @@ void non_eq_Out_1__WrapperNospec ()/*ord-max..exp.sl.sk:155*/
 [SKETCH] DONE
 Total time = 6615
 ";
-            var wf = SketchParser.WholeFile.Parse(a);
-            Assert.AreEqual(6615, wf.TimeTaken.Value);
+            (var head, var body, var foot) = SketchSyntaxParser.StripHeaders(a).Unwrap();
+
+            Assert.AreEqual(a.Substring(0, 10), head.Substring(0, 10));
+            Assert.IsTrue(body.Substring(0,10).TrimStart().StartsWith("void"));
+
+            Assert.IsTrue(SketchParser.FileContent.ParseMany(body).ToList().Count > 0);
+
 
         }
     }

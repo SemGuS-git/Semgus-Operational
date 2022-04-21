@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal static class SymbolicInterpreter {
         public record Result(IExpression ReturnValue, IReadOnlyDictionary<Identifier, IExpression> RefVariables, IReadOnlyDictionary<Identifier, IExpression> Globals);
 

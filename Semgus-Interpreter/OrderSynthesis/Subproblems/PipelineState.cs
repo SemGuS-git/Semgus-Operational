@@ -1,4 +1,5 @@
-﻿using Semgus.OrderSynthesis.SketchSyntax;
+﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.SketchSyntax;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal record PipelineState(

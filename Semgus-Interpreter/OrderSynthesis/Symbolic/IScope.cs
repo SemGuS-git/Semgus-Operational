@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal interface IScope {
         IEnumerator<IStatement> Enumerator { get; }
         IEnumerable<KeyValuePair<Identifier, IExpression>> GetSideEffectAssigns();

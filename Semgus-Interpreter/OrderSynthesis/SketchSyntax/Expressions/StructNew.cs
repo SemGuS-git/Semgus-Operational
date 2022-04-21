@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal record StructNew(Identifier TypeId, IReadOnlyList<Assignment> Args) : IExpression {
 
         private IReadOnlyDictionary<Identifier,int>? _dict = null;

@@ -1,4 +1,5 @@
-﻿using Semgus.Model;
+﻿using Semgus.MiniParser;
+using Semgus.Model;
 using Semgus.Model.Smt;
 using Semgus.Operational;
 using Semgus.OrderSynthesis.SketchSyntax;

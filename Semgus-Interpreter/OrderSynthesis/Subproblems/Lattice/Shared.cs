@@ -15,7 +15,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 List<Variable> input_args = new();
                 List<IStatement> input_assembly_statements = new();
 
-                input_assembly_statements.Add(new LineComment("Assemble structs"));
+                input_assembly_statements.Add(new Annotation("Assemble structs"));
 
                 foreach (var obj in input_structs) {
                     if (obj.Type is not StructType st) throw new NotSupportedException();

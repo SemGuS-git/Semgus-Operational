@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal class ScopeStack {
         private readonly Stack<IScope> _stack = new();
         private readonly IReadOnlyDictionary<Identifier, FunctionDefinition> _functionMap;

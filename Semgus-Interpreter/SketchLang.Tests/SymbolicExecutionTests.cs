@@ -5,10 +5,13 @@ using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Sprache;
 using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
 using System.Collections.Generic;
+using Semgus.MiniParser;
 
 namespace Semgus.SketchLang.Tests {
     [TestClass]
     public class SymbolicExecutionTests {
+        static SketchSyntaxParser SketchParser = SketchSyntaxParser.Instance;
+
         static FunctionDefinition new_compare_In_0;
         static FunctionDefinition compare_In_0;
         static IExpression new_compare_In_0_normalized;
@@ -91,17 +94,17 @@ void compare_In_0 (In_0 a, In_0 b, ref bit _out)/*manual_outer.sk:6*/
         }
 
 
-        [TestMethod]
-        public void New_compare_In_0() {
-            var x = SymbolicInterpreter.Evaluate(new_compare_In_0, compare_In_0);
+        //[TestMethod]
+        //public void New_compare_In_0() {
+        //    var x = SymbolicInterpreter.Evaluate(new_compare_In_0, compare_In_0);
 
-            var out_val = x.RefVariables[new("_out")];
+        //    var out_val = x.RefVariables[new("_out")];
 
-            var norm_1 = BitTernaryFlattener.Normalize(out_val);
-            var norm_2 = NegationNormalForm.Normalize(norm_1);
-            var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
-            Assert.AreEqual(new_compare_In_0_normalized, norm_3);
-        }
+        //    var norm_1 = BitTernaryFlattener.Normalize(out_val);
+        //    var norm_2 = NegationNormalForm.Normalize(norm_1);
+        //    var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
+        //    Assert.AreEqual(new_compare_In_0_normalized, norm_3);
+        //}
 
 
         static UnaryOperation Not(IExpression v) => UnaryOp.Not.Of(v);

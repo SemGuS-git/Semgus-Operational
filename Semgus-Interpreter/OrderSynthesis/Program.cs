@@ -1,6 +1,7 @@
 ﻿#define NOT_REUSE
 
 using Semgus.CommandLineInterface;
+using Semgus.MiniParser;
 using Semgus.Operational;
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
@@ -83,7 +84,11 @@ namespace Semgus.OrderSynthesis {
             } catch (Exception e) {
                 Console.Error.Write(e);
                 Console.Error.Write("Halting");
-                if (state is not null) await WriteState(dir.Append("incomplete_result/"), state);
+                if (state is not null) {
+                    var stash = dir.Append("incomplete_result/");
+                    Directory.CreateDirectory(stash.PathWin);
+                    await WriteState(stash, state);
+                }
                 throw;
             }
 
@@ -124,7 +129,12 @@ namespace Semgus.OrderSynthesis {
 
         public static IReadOnlyList<FunctionDefinition> ReadSelectedFunctions(string text, IEnumerable<Identifier> targets) {
             var indexMap = targets.Select((t, i) => (t, i)).ToDictionary(u => u.t, u => u.i);
-            var raw = SketchParser.WholeFile.Parse(text).Contents.Where(st => st is FunctionDefinition fd && targets.Contains(fd.Id)).Cast<FunctionDefinition>();
+
+            var (head, body, foot) = SketchSyntaxParser.StripHeaders(text).Unwrap();
+
+            var parsed = SketchSyntaxParser.Instance.FileContent.Symbol.ParseString(body).Unwrap();
+
+            var raw = parsed.Where(st => st is FunctionDefinition fd && targets.Contains(fd.Id)).Cast<FunctionDefinition>();
 
             var ordered = new FunctionDefinition[indexMap.Count];
 
@@ -156,33 +166,35 @@ namespace Semgus.OrderSynthesis {
             return new FunctionDefinition(sig_functional, adjusted.ToList());
         }
 
+        delegate IStatement productor(IExpression value);
+
 
         public static FunctionDefinition Compactify(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
-            var (sig_functional, raw_output) = CompactifyInner(function, available);
+            var (raw_output, pro) = CompactifyInner(function, available);
 
             var norm_1 = BitTernaryFlattener.Normalize(raw_output);
 
-            return new FunctionDefinition(sig_functional, new ReturnStatement(norm_1));
+            return function with { Body = new[] { pro(norm_1) } };
+
+            //return new FunctionDefinition(sig_functional, pro(norm_1))
 
             //var norm_2 = NegationNormalForm.Normalize(norm_1);
             //var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
         }
 
-        private static (IFunctionSignature, IExpression) CompactifyInner(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
-            var sig_functional = function.Signature.AsFunctional(out var refVarId);
+        private static (IExpression,productor) CompactifyInner(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
+            function.Signature.AsFunctional(out var refVarId);  // todo strip this down
             var eval_result = SymbolicInterpreter.Evaluate(function, available);
 
             IExpression raw_output;
 
             if (refVarId is null) {
-                Debug.Assert(function.Signature.ReturnTypeId != VoidType.Id);
-                Debug.Assert(eval_result.ReturnValue is not Empty);
                 raw_output = eval_result.ReturnValue;
+                return (raw_output, e => new ReturnStatement(e));
             } else {
                 raw_output = eval_result.RefVariables[refVarId];
+                return (raw_output, e => new Assignment(new VariableRef(refVarId), e));
             }
-
-            return (sig_functional, raw_output);
         }
 
         public static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, params FunctionDefinition[] available) => Compactify(input, (IEnumerable<FunctionDefinition>)available);

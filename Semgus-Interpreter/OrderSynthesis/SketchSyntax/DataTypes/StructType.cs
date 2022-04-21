@@ -1,4 +1,5 @@
-﻿using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 
 
 
@@ -121,7 +122,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         public IEnumerable<IStatement> GetPartialEqAssertions(Variable a, Variable b, Variable c) {
             if (a.Type != this || b.Type != this || c.Type != this) throw new ArgumentException();
 
-            yield return new LineComment($"{a.Type}: reflexivity and antisymmetry", 1);
+            yield return new Annotation($"{a.Type}: reflexivity and antisymmetry", 1);
             yield return new AssertStatement(
                 Op.Eq.Of(
                     Op.And.Of(
@@ -132,7 +133,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
                 )
             );
 
-            yield return new LineComment($"{a.Type}: transitivity");
+            yield return new Annotation($"{a.Type}: transitivity");
             yield return new AssertStatement(
                 Op.Or.Of(this.NotCompare(a, b), this.NotCompare(b, c), this.Compare(a, c))
             );

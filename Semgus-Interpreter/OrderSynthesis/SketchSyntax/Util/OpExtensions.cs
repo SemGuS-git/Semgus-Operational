@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal static class OpExtensions {
         public static string Str(this UnaryOp op) => op switch {
             UnaryOp.Not => "!",

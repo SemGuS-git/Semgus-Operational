@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal record WeakVariableDeclaration  (Identifier TypeId, Identifier Id, IExpression Def)  : IStatement, IVariableInfo  {
         public WeakVariableDeclaration(Identifier typeId, Identifier id) : this(typeId, id, Empty.Instance) { }
 

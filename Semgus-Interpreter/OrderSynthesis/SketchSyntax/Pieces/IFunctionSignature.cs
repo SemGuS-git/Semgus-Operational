@@ -1,5 +1,7 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal interface IFunctionSignature {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
+    internal interface IFunctionSignature : INode {
         FunctionModifier Flag { get; }
         Identifier ReturnTypeId { get; }
         Identifier Id { get; }

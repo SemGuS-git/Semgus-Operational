@@ -1,4 +1,4 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.Parsing.Iota {
+﻿namespace Semgus.Util {
     internal class Trie<T> {
         public T? Value;
         private Dictionary<char, Trie<T>> branches = new();
@@ -32,9 +32,8 @@
             t.Put(value);
         }
 
-        public static Trie<T> Build(IEnumerable<(char, T)> at_chars, IEnumerable<(string, T)> at_strings) {
+        public static Trie<T> Build(IEnumerable<(string, T)> at_strings) {
             var root = new Trie<T>();
-            foreach (var (c, t) in at_chars) root.Insert(c, t);
             foreach (var (s, t) in at_strings) root.Insert(s, t);
             return root;
         }

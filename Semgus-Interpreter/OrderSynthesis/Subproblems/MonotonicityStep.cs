@@ -1,4 +1,5 @@
-﻿using Semgus.OrderSynthesis.SketchSyntax;
+﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.Util;
 using System.Diagnostics;
@@ -32,7 +33,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             foreach (var sem in all_sem) {
-                var fn = converter.OpSemToFunction(new($"lang_f{functions.Count}"), sem.ProductionRule, sem.Steps);
+                var fn = converter.OpSemToFunction(new($"lang_f{functions.Count+non_mono.Count}"), sem.ProductionRule, sem.Steps);
                 if (fn.Signature is not FunctionSignature sig) throw new NotSupportedException(); // Should never happen
 
                 fn.Alias = sem.ProductionRule.ToString();
@@ -87,12 +88,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.AddRange(input_assembly_statements);
 
-            body.Add(new LineComment("Check partial equality properties", 2));
+            body.Add(new Annotation("Check partial equality properties", 2));
             foreach (var c in clasps) {
                 body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0], c.Indexed[1], c.Indexed[2]));
             }
 
-            body.Add(new LineComment("Monotonicity", 2));
+            body.Add(new Annotation("Monotonicity", 2));
 
             var n_mono = new Variable("n_mono", IntType.Instance);
             body.Add(new VariableDeclaration(n_mono, new Literal(0)));
@@ -123,7 +124,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 }
             }
 
-            yield return new LineComment($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
+            yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
 
             for (int i = 0; i < sig.Args.Count; i++) {
                 if (sig.Args[i].Type is not StructType type_i) throw new NotSupportedException();
@@ -155,7 +156,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             List<Variable> input_args = new();
             List<IStatement> input_assembly_statements = new();
 
-            input_assembly_statements.Add(new LineComment("Assemble structs"));
+            input_assembly_statements.Add(new Annotation("Assemble structs"));
 
             foreach (var obj in input_structs) {
                 if (obj.Type is not StructType st) throw new NotSupportedException();

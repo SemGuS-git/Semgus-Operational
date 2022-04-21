@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Semgus.MiniParser;
+using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal class InvocationScope : ScopeBase {

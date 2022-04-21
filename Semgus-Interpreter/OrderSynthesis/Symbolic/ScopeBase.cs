@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal record StructValuePlaceholder(IReadOnlyList<Identifier> PropertyKeys) : IExpression {
 
     }

@@ -1,4 +1,5 @@
-﻿using Semgus.OrderSynthesis.SketchSyntax;
+﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.Subproblems.LatticeSubstep;
 using System;
 using System.Collections.Generic;

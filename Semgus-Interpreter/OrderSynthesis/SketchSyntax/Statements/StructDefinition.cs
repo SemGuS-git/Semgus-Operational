@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax {
     internal record StructDefinition  (Identifier Id, IReadOnlyList<IVariableInfo> Props)  : IStatement  {
 
         public string? Comment { get; set; }
