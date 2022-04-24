@@ -1,20 +1,20 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Parsing;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
 using System.Collections.Generic;
-using Semgus.MiniParser;
 
 namespace Semgus.SketchLang.Tests {
+
     [TestClass]
     public class SymbolicExecutionTests {
-        static SketchSyntaxParser SketchParser = SketchSyntaxParser.Instance;
+        static readonly SketchSyntaxParser SketchParser = SketchSyntaxParser.Instance;
 
-        static FunctionDefinition new_compare_In_0;
-        static FunctionDefinition compare_In_0;
-        static IExpression new_compare_In_0_normalized;
-        static IExpression compare_In_0_normalized;
+        static readonly FunctionDefinition new_compare_In_0;
+        static readonly FunctionDefinition compare_In_0;
+        static readonly IExpression new_compare_In_0_normalized;
+        static readonly IExpression compare_In_0_normalized;
 
         static SymbolicExecutionTests() {
             new_compare_In_0 = SketchParser.FunctionDefinition.Parse(@"
@@ -68,7 +68,7 @@ void compare_In_0 (In_0 a, In_0 b, ref bit _out)/*manual_outer.sk:6*/
             var a = SketchParser.Expression.Parse(s);
             var b = SketchParser.Expression.Parse(s);
 
-            Assert.AreEqual(BitTernaryFlattener.Normalize(a),BitTernaryFlattener.Normalize(b));
+            Assert.AreEqual(LogicalBranchesReduced.Normalize(a),LogicalBranchesReduced.Normalize(b));
         }
 
 
@@ -89,7 +89,7 @@ void compare_In_0 (In_0 a, In_0 b, ref bit _out)/*manual_outer.sk:6*/
             );
             var clean = Or(Or(And(A, B), And(C, D)), And(E, F));
 
-            Assert.AreEqual(clean, BitTernaryFlattener.Normalize(rough));
+            Assert.AreEqual(clean, LogicalBranchesReduced.Normalize(rough));
         }
 
         [TestMethod]

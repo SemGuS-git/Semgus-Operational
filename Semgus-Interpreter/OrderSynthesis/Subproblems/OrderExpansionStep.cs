@@ -1,11 +1,12 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using Semgus.Util;
 using Semgus.Util.Misc;
 using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
+    using static Sugar;
     internal class OrderExpansionStep {
         public record Config(
             IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
@@ -97,7 +98,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Variable a = new(type.Name + "_new0", type);
             Variable b = new(type.Name + "_new1", type);
 
-            yield return new AssertStatement(Op.Geq.Of(budget.Ref(), X.L0));
+            yield return new AssertStatement(Op.Geq.Of(budget.Ref(), Lit0));
 
             yield return a.Declare(new StructNew(type.Id, type.Elements.Select(e => e.Assign(new Hole())).ToList()));
             yield return b.Declare(new StructNew(type.Id, type.Elements.Select(e => e.Assign(new Hole())).ToList()));

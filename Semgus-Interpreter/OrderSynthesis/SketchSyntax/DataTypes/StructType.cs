@@ -1,9 +1,9 @@
 ﻿using Semgus.MiniParser;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
-
-
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
+    using static Sugar;
+
     internal class StructType : IType {
         public Identifier Id { get; }
         public string Name => Id.Name;
@@ -51,7 +51,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_b = new("b", this);
 
             return new FunctionDefinition(new FunctionSignature(BitType.Id, CompareId, new[] { var_a, var_b }),
-                new VariableDeclaration(var_leq, X.L0),
+                new VariableDeclaration(var_leq, Lit0),
                 new RepeatStatement(new Hole(),
                     var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a, var_b)))
                 ),
@@ -69,7 +69,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
                 new RepeatStatement(budget.Ref(),
                     var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a, var_b)))
                 ),
-                X.Return(var_leq.Ref())
+                Return(var_leq.Ref())
             );
         }
 
@@ -79,11 +79,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_b = new("b", this);
 
             return new FunctionDefinition(new FunctionSignature(BitType.Id, CompareId, new[] { var_a, var_b }),
-                var_leq.Declare(X.L0),
+                var_leq.Declare(Lit0),
                 new RepeatStatement(budget.Ref(),
                     var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
                 ),
-                X.Return(var_leq.Ref())
+                Return(var_leq.Ref())
             );
         }
 
@@ -93,7 +93,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_b = new("b", this);
 
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Generator, BitType.Id, DisjunctId, new[] { var_a, var_b }),
-                X.Return(
+                Return(
                     Op.And.Of(Elements.Select(e =>
                         GetAtomFunctionId(e.Type).Call(var_a.Get(e), var_b.Get(e))
                     ).ToList())
@@ -114,8 +114,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, NonEqId, Array.Empty<Variable>()),
                 var_a.Declare(this.NewFromHoles()),
                 var_a.Declare(this.NewFromHoles()),
-                X.Assert(X.Not(EqId.Call(var_a, var_b))),
-                X.Assert(CompareId.Call(var_a, var_b))
+                Assertion(Not(EqId.Call(var_a, var_b))),
+                Assertion(CompareId.Call(var_a, var_b))
             );
         }
 
@@ -136,8 +136,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             yield return new Annotation($"{a.Type}: transitivity");
             yield return new AssertStatement(
                 Op.Or.Of(
-                    X.Not(CompareId.Call(a, b)),
-                    X.Not(CompareId.Call(b, c)),
+                    Not(CompareId.Call(a, b)),
+                    Not(CompareId.Call(b, c)),
                     CompareId.Call(a, c)
                 )
             );

@@ -1,6 +1,6 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using Semgus.Util.Misc;
 using System.Diagnostics;
 

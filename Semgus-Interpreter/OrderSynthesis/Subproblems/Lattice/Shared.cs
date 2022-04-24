@@ -1,15 +1,15 @@
 ﻿using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     namespace LatticeSubstep {
         internal class Shared {
-            public const int INT_MAX = 100;
-            public const int INT_OFFSET = 16;
-
+            public static Literal IntOffset { get; } = new(16);
+            public static Literal IntMin { get; } = new (-100);
+            public static Literal IntMax { get; } = new(100);
 
             static Assignment AdjustedAssign(Variable lhs, Variable rhs)
-                => lhs.Assign(lhs.TypeId == IntType.Id ? Op.Minus.Of(rhs.Ref(), new Literal(INT_OFFSET)) : rhs.Ref());
+                => lhs.Assign(lhs.TypeId == IntType.Id ? Op.Minus.Of(rhs.Ref(), IntOffset) : rhs.Ref());
 
             static (IReadOnlyList<Variable> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<Variable> input_structs) {
                 List<Variable> input_args = new();
@@ -41,21 +41,6 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("forall_" + test.Id.Name), input_args), body);
             }
-
-            //public static FunctionDefinition GetRefinementMain(FunctionDefinition test, params Variable[] vars) {
-            //    List<IStatement> body = new();
-
-            //    var (input_args, input_assembly_statements) = GetMainInitContent(vars);
-
-            //    body.AddRange(input_args.Select(var =>
-            //        var.Declare(new Hole())
-            //    ));
-
-            //    body.AddRange(input_assembly_statements);
-            //    body.Add(test.Call(vars.Select(v => v.Ref()).ToList()));
-
-            //    return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main_" + test.Id.Name), Array.Empty<Variable>()), body);
-            //}
         }
     }
 }

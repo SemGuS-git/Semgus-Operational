@@ -1,8 +1,6 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Parsing;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using System.Linq;
 
 namespace Semgus.SketchLang.Tests {
@@ -654,8 +652,8 @@ Total time = 6615
 ";
             (var head, var body, var foot) = SketchSyntaxParser.StripHeaders(a).Unwrap();
 
-            Assert.AreEqual(a.Substring(0, 10), head.Substring(0, 10));
-            Assert.IsTrue(body.Substring(0,10).TrimStart().StartsWith("void"));
+            Assert.AreEqual(a[..10], head[..10]);
+            Assert.IsTrue(body[..10].TrimStart().StartsWith("void"));
 
             Assert.IsTrue(SketchParser.FileContent.ParseMany(body).ToList().Count > 0);
 

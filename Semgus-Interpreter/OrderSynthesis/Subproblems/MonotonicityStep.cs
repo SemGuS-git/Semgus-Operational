@@ -1,10 +1,12 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using Semgus.Util;
 using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
+    using static Sugar;
+
     internal class MonotonicityStep {
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
@@ -143,19 +145,19 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 var mono_flag = new Variable($"mono_{fn.Id}_{i}", IntType.Instance);
 
                 yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Id}_{i}"));
-                yield return mono_flag.IfEq(X.L0,
-                    X.Assert(
+                yield return mono_flag.IfEq(Lit0,
+                    Assertion(
                         type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
                             .Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
                     ),
-                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), X.L1))
+                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), Lit1))
                 );
-                yield return mono_flag.IfEq(X.L1,
-                    X.Assert(
+                yield return mono_flag.IfEq(Lit1,
+                    Assertion(
                         type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
                             .Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
                     ),
-                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), X.L1))
+                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), Lit1))
                 );
             }
         }

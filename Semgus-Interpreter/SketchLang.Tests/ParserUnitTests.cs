@@ -1,18 +1,15 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Parsing;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Semgus.SketchLang.Tests {
-
+    using static Sugar;
 
     [TestClass]
     public class ParserUnitTests {
@@ -628,41 +625,41 @@ struct Out_0 {
 
         /***** IfStatement ******/
         static IEnumerable<object[]> IfStatementCases => new[] {
-            new object[] { "if(x) {}", X.If(Var("x")) },
+            new object[] { "if(x) {}", If(Var("x")) },
             new object[] { "if(x==5) {}", Var("x").IfEq(Lit(5)) },
-            new object[] { "if(x==5) { assert(2); }", Var("x").IfEq(Lit(5), X.Assert(2)) },
-            new object[] { "if(!(_pac_sc_s54)){ }/*ord-max..exp.sl.sk:206*/", X.If(UnaryOp.Not.Of(Var("_pac_sc_s54"))) },
-            new object[] { "if(a) { } else { return; }", X.If(Var("a")).Else(X.Return()) },
-            new object[] { "if(a) return; else return;", X.If(Var("a"), X.Return()).Else(X.Return()) },
+            new object[] { "if(x==5) { assert(2); }", Var("x").IfEq(Lit(5), Assertion(Lit(2))) },
+            new object[] { "if(!(_pac_sc_s54)){ }/*ord-max..exp.sl.sk:206*/", If(UnaryOp.Not.Of(Var("_pac_sc_s54"))) },
+            new object[] { "if(a) { } else { return; }", If(Var("a")).Else(Return()) },
+            new object[] { "if(a) return; else return;", If(Var("a"), Return()).Else(Return()) },
             new object[] { "if(a) if(b) return 1; else return 2;",
-                X.If(Var("a"),
-                    X.If(Var("b"),
-                        X.Return(1)
+                If(Var("a"),
+                    If(Var("b"),
+                        Return(Lit1)
                     )
                     .Else(
-                        X.Return(2)
+                        Return(Lit2)
                     )
                 ),
             },
             new object[] { "if(a) { if(b) return 1; } else return 2;",
-                X.If(Var("a"),
-                    X.If(Var("b"),
-                        X.Return(1)
+                If(Var("a"),
+                    If(Var("b"),
+                        Return(Lit1)
                     )
                 )
                 .Else(
-                    X.Return(2)
+                    Return(Lit2)
                 )
             },
             new object[] { "if(a) return 1; else if(b) return 2; else return 3;",
-                X.If(Var("a"),
-                    X.Return(1)
+                If(Var("a"),
+                    Return(Lit1)
                 )
                 .ElseIf(Var("b"),
-                    X.Return(2)
+                    Return(Lit2)
                 )
                 .Else(
-                    X.Return(3)
+                    Return(Lit3)
                 )
             }
         };
@@ -849,7 +846,7 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
 
 
         //",
-        //                new FunctionDefinition(new WeakFunctionSignature(FunctionModifier.None,IntType.Id,new("the_target"),Array.Empty<IVariableInfo>()),X.Return(X.L1))
+        //                new FunctionDefinition(new WeakFunctionSignature(FunctionModifier.None,IntType.Id,new("the_target"),Array.Empty<IVariableInfo>()),Sugar.Return(Sugar.L1))
         //            }
         //        };
 

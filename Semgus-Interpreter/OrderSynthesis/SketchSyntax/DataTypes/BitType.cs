@@ -1,9 +1,8 @@
 ﻿using Semgus.MiniParser;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
-
-
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
+    using static Sugar;
     internal class BitType : IType {
         public static BitType Instance { get; } = new();
 
@@ -20,11 +19,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_b = new("b", type);
             Variable var_t = new("t", IntType.Instance);
 
-            return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, AtomId, new[] { var_a, var_b }),
+            return new(new FunctionSignature(FunctionModifier.Generator, Id, AtomId, new[] { var_a, var_b }),
                 new VariableDeclaration(var_t, new Hole()),
-                var_t.IfEq(X.L0, X.Return(var_a.Implies(var_b))),
-                var_t.IfEq(X.L1, X.Return(var_a.Implies(var_b))),
-                new ReturnStatement(X.L1)
+                var_t.IfEq(Lit0, Return(var_a.Implies(var_b))),
+                var_t.IfEq(Lit1, Return(var_a.Implies(var_b))),
+                new ReturnStatement(Lit1)
             );
         }
 

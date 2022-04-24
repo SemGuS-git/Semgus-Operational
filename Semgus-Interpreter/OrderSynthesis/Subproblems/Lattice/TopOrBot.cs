@@ -1,8 +1,10 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 
 namespace Semgus.OrderSynthesis.Subproblems {
+    using static Sugar;
+
     namespace LatticeSubstep {
         internal class TopOrBot : ILatticeSubstep {
             public bool IsTopElseBot { get; }
@@ -14,7 +16,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             static FunctionDefinition AtomBit { get; }
                 = new(new FunctionSignature(FunctionModifier.Generator, BitType.Instance, new Identifier("fixed_atom_bit"), Array.Empty<Variable>()),
-                    X.Return(new Hole())
+                    Return(new Hole())
                 );
 
             static FunctionDefinition AtomInt { get; }
@@ -23,9 +25,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                     return new(new FunctionSignature(FunctionModifier.Generator, IntType.Instance, new Identifier("fixed_atom_int"), Array.Empty<Variable>()),
                         v_t.Declare(new Hole()),
-                        v_t.IfEq(X.L0, X.Return(-Shared.INT_MAX)),
-                        v_t.IfEq(X.L1, X.Return(Shared.INT_MAX)),
-                        X.Return(X.L0)
+                        v_t.IfEq(Lit0, Return(Shared.IntMin)),
+                        v_t.IfEq(Lit1, Return(Shared.IntMax)),
+                        Return(Lit0)
                     );
                 }).Invoke();
 
@@ -44,7 +46,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 this.Compare = compare;
 
                 SynthGenerator = new FunctionDefinition(new FunctionSignature(subject, SynthFunId, Array.Empty<Variable>()),
-                    X.Return(
+                    Return(
                         new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.Type).Call())).ToList())
                     )
                 );
@@ -59,7 +61,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
 
                 var assert_bound_holds = new FunctionDefinition(new FunctionSignature(VoidType.Instance, new($"test_{Which}"), new[] { a }),
-                    X.Assert(check_bound)
+                    Assertion(check_bound)
                 );
 
                 var bound_holds_forall = Shared.GetForallTestHarness(assert_bound_holds, a);
@@ -89,18 +91,18 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     // next_top < prev_top
                     ? Op.And.Of(
                         Compare.Call(next_val, prev_val),
-                        X.Not(Compare.Call(prev_val, next_val))
+                        Not(Compare.Call(prev_val, next_val))
                     )
                     // next_bot < prev_bot
                     : (IExpression)Op.And.Of(
                         Compare.Call(prev_val, next_val),
-                        X.Not(Compare.Call(next_val, prev_val))
+                        Not(Compare.Call(next_val, prev_val))
                     );
 
                 return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Instance, new($"improve_{Which}"), Array.Empty<IVariableInfo>()),
                     prev_val.Declare(prev_def.Call()),
                     next_val.Declare(SynthGenerator.Call()),
-                    X.Assert(is_tighter_bound)
+                    Assertion(is_tighter_bound)
                 );
             }
         }

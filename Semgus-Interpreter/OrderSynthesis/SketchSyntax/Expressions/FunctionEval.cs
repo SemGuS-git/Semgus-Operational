@@ -1,5 +1,5 @@
 ﻿using Semgus.MiniParser;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.SketchSyntax {

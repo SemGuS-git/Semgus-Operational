@@ -3,7 +3,7 @@ using Semgus.Model;
 using Semgus.Model.Smt;
 using Semgus.Operational;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 using System.Text;
 
 namespace Semgus.OrderSynthesis.Subproblems {

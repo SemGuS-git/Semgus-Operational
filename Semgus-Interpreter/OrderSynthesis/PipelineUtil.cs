@@ -93,7 +93,7 @@ namespace Semgus.OrderSynthesis {
 
             var raw_output = refVarId is null ? eval_result.ReturnValue : eval_result.RefVariables[refVarId];
 
-            var norm_1 = BitTernaryFlattener.Normalize(raw_output);
+            var norm_1 = LogicalBranchesReduced.Normalize(raw_output);
 
             return function with { Signature = sig_functional, Body = new[] { new ReturnStatement(norm_1) } };
         }

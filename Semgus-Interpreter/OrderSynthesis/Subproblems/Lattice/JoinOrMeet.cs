@@ -1,8 +1,10 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
-using Semgus.OrderSynthesis.SketchSyntax.Sugar;
+using Semgus.OrderSynthesis.SketchSyntax.Helpers;
 
 namespace Semgus.OrderSynthesis.Subproblems {
+    using static Sugar;
+
     namespace LatticeSubstep {
         internal class JoinOrMeet : ILatticeSubstep {
             static FunctionDefinition AtomBit { get; }
@@ -14,13 +16,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     var b_ref = b.Ref();
                     return new(new FunctionSignature(FunctionModifier.Generator, BitType.Instance, new Identifier("overlap_atom_bit"), new[] { a, b }),
                         t.Declare(new Hole()),
-                        t.IfEq(X.L0, X.Return(Op.And.Of(a_ref, b_ref))),
-                        t.IfEq(X.L1, X.Return(Op.Or.Of(a_ref, b_ref))),
-                        t.IfEq(X.L2, X.Return(Op.Eq.Of(a_ref, b_ref))),
-                        t.IfEq(X.L3, X.Return(Op.Neq.Of(a_ref, b_ref))),
-                        t.IfEq(X.L4, X.Return(UnaryOp.Not.Of(Op.Or.Of(a_ref, b_ref)))),
-                        t.IfEq(X.L5, X.Return(X.L0)),
-                        X.Return(X.L1)
+                        t.IfEq(Lit0, Return(Op.And.Of(a_ref, b_ref))),
+                        t.IfEq(Lit1, Return(Op.Or.Of(a_ref, b_ref))),
+                        t.IfEq(Lit2, Return(Op.Eq.Of(a_ref, b_ref))),
+                        t.IfEq(Lit3, Return(Op.Neq.Of(a_ref, b_ref))),
+                        t.IfEq(Lit4, Return(UnaryOp.Not.Of(Op.Or.Of(a_ref, b_ref)))),
+                        t.IfEq(Lit5, Return(Lit0)),
+                        Return(Lit1)
                     );
                 }).Invoke();
 
@@ -33,11 +35,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     var b_ref = b.Ref();
                     return new(new FunctionSignature(FunctionModifier.Generator, IntType.Instance, new Identifier("overlap_atom_int"), new[] { a, b }),
                         t.Declare(new Hole()),
-                        t.IfEq(X.L0, X.Return(new Ternary(Op.Lt.Of(a_ref, b_ref), a_ref, b_ref))),
-                        t.IfEq(X.L1, X.Return(new Ternary(Op.Gt.Of(a_ref, b_ref), a_ref, b_ref))),
-                        t.IfEq(X.L2, X.Return(-Shared.INT_MAX)),
-                        t.IfEq(X.L3, X.Return(Shared.INT_MAX)),
-                        X.Return(X.L0)
+                        t.IfEq(Lit0, Return(new Ternary(Op.Lt.Of(a_ref, b_ref), a_ref, b_ref))),
+                        t.IfEq(Lit1, Return(new Ternary(Op.Gt.Of(a_ref, b_ref), a_ref, b_ref))),
+                        t.IfEq(Lit2, Return(Shared.IntMin)),
+                        t.IfEq(Lit3, Return(Shared.IntMax)),
+                        Return(Lit0)
                     );
                 }).Invoke();
 
@@ -73,7 +75,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 var a = new Variable("a", subject);
                 var b = new Variable("b", subject);
                 return new FunctionDefinition(new FunctionSignature(subject,id, new[] { a, b }),
-                    X.Return(
+                    Return(
                         new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.Type).Call(a.Get(e), b.Get(e)))).ToList())
                     )
                 );
@@ -94,16 +96,16 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 var test_correct = new FunctionDefinition(new FunctionSignature(VoidType.Instance, new($"test_{Which}"), new[] { a, b }),
                     op_val.Declare(SynthesisTarget.Call(a,b)),
-                    X.If(Compare.Call(a,b),
-                        X.Assert(
+                    If(Compare.Call(a,b),
+                        Assertion(
                             Eq.Call(op_val, IsJoinElseMeet ? b : a) // if a <= b: Join(a,b) = b, Meet(a,b) = a
                         )
                     ).ElseIf(Compare.Call(b,a),
-                        X.Assert(
+                        Assertion(
                             Eq.Call(op_val, IsJoinElseMeet ? a : b) // if b <= a: Join(a,b) = a, Meet(a,b) = b
                         )
                     ).Else(
-                        X.Assert(Op.And.Of(BoundCheck(a),BoundCheck(b))) // if incomparable: each(a,b) <= Join(a,b), Meet(a,b) <= each(a,b)
+                        Assertion(Op.And.Of(BoundCheck(a),BoundCheck(b))) // if incomparable: each(a,b) <= Join(a,b), Meet(a,b) <= each(a,b)
                     )
                 );
 
@@ -129,7 +131,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 Variable a = new("a", Subject);
                 Variable b = new("b", Subject);
 
-                IExpression ab_incomparable = X.Not(Op.Or.Of(Compare.Call(a, b), Compare.Call(b, a)));
+                IExpression ab_incomparable = Not(Op.Or.Of(Compare.Call(a, b), Compare.Call(b, a)));
 
                 Variable prev_val = new($"prev_{Which}_ab", Subject);
                 Variable next_val = new($"next_{Which}_ab", Subject);
@@ -138,21 +140,21 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     // next_join < prev_join
                     ? Op.And.Of(
                         Compare.Call(next_val, prev_val),
-                        X.Not(Compare.Call(prev_val, next_val))
+                        Not(Compare.Call(prev_val, next_val))
                     )
                     // next_meet < prev_meet
                     : (IExpression)Op.And.Of(
                         Compare.Call(prev_val, next_val),
-                        X.Not(Compare.Call(next_val, prev_val))
+                        Not(Compare.Call(next_val, prev_val))
                     );
 
                 return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Instance, new($"improve_{Which}"), Array.Empty<IVariableInfo>()),
                     a.Declare(Subject.NewFromHoles()),
                     b.Declare(Subject.NewFromHoles()),
-                    X.Assert(ab_incomparable),
+                    Assertion(ab_incomparable),
                     prev_val.Declare(prev_def.Call(a,b)),
                     next_val.Declare(SynthesisTarget.Call(a,b)),
-                    X.Assert(is_tighter_bound)
+                    Assertion(is_tighter_bound)
                 );
             }
         }
