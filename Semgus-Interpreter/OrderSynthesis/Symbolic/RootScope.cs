@@ -6,17 +6,23 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
         private readonly HashSet<Identifier> _refVariables;
 
 
-        private RootScope(FunctionDefinition fn, IReadOnlyList<VariableRef> argRefs) : base(fn, argRefs, argRefs) {
+        public RootScope(FunctionDefinition fn) : base(fn) {
             this._refVariables = fn.Signature.Args.Where(a => a is RefVariableDeclaration).Select(a => a.Id).ToHashSet();
         }
 
-        public RootScope(FunctionDefinition fn) : this(fn, fn.Signature.Args.Select(vi => new VariableRef(vi.Id)).ToList()) { }
-
+        public void Initialize(FunctionDefinition fn) => Initialize(fn, fn.Signature.Args.Select(vi => new VariableRef(vi.Id)).ToList());
+        
+        public void Initialize(FunctionDefinition fn, IReadOnlyList<VariableRef> argRefs) {
+            base.Initialize(fn, argRefs, argRefs);
+        }
 
         public SymbolicInterpreter.Result? Result { get; private set; } = null;
 
         public override void OnPop(ScopeStack stack) {
             Debug.Assert(PendingStack.Count == 0);
+
+            // Unflatten struct values
+            BakeAllStructVars();
 
             if (LocalAssigns.TryGetValue(ReturnValueId, out var returnValue) && returnValue is not Empty) {
                 Debug.Assert(!_isVoid);

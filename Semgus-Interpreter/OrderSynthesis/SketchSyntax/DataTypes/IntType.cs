@@ -20,7 +20,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_b = new("b", type);
             Variable var_t = new("t", IntType.Instance);
 
-            return new(new FunctionSignature(AtomId, FunctionModifier.Generator, BitType.Instance, new[] { var_a, var_b }),
+            return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, AtomId,new[] { var_a, var_b }),
                 new VariableDeclaration(var_t, new Hole()),
                 var_t.IfEq(X.L0, X.Return(Op.Eq .Of(var_a, var_b))),
                 var_t.IfEq(X.L1, X.Return(Op.Leq.Of(var_a, var_b))),

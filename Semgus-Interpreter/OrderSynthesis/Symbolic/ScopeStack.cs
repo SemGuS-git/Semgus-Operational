@@ -24,6 +24,13 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             }
             return new VariableRef(id); // Treat this as a free variable
         }
+        internal bool TryGetAssignedValue(Identifier id,out IExpression val) {
+            foreach (var frame in _stack) {
+                if (frame.TryGetLocalValue(id, out val)) return true;
+            }
+            val = Empty.Instance;
+            return false;
+        }
     }
 
 }

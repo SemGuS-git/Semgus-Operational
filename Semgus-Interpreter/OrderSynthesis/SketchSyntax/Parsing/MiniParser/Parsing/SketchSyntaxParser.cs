@@ -36,7 +36,7 @@ namespace Semgus.MiniParser {
         public Parser<IStatement> Statement { get; }
         public Parser<IVariableInfo> FunctionArg { get; }
         public Parser<IVariableInfo> FunctionArgList { get; }
-        public Parser<WeakFunctionSignature> WeakFunctionSignature { get; }
+        public Parser<FunctionSignature> WeakFunctionSignature { get; }
         public Parser<FunctionDefinition> FunctionDefinition { get; }
         public Parser<StructDefinition> StructDefinition { get; }
         public Parser<IfStatement> IfStatement { get; }
@@ -190,7 +190,7 @@ namespace Semgus.MiniParser {
 
             var fn_sig = ((Kw("harness") | "generator").Maybe() + identifier + identifier + fn_arg_list + ("implements" + identifier).Maybe())
                 .Transform(ctx =>
-                    new WeakFunctionSignature(
+                    new FunctionSignature(
                         Flag: ctx.TryTakeKeywordFrom(modmaps, out var mod) ? mod : FunctionModifier.None,
                         ReturnTypeId: ctx.Take<Identifier>(),
                         Id: ctx.Take<Identifier>(),
@@ -199,7 +199,7 @@ namespace Semgus.MiniParser {
                 );
 
             var def_function = (fn_sig + "{" + statement.Star() + "}")
-                .Transform(ctx => new FunctionDefinition(Signature: ctx.Take<WeakFunctionSignature>(), Body: ctx.TakeStar<IStatement>()));
+                .Transform(ctx => new FunctionDefinition(Signature: ctx.Take<FunctionSignature>(), Body: ctx.TakeStar<IStatement>()));
             def_function.Name = "def_function";
 
             var file_content = (def_struct | def_function | declare_var).Star();

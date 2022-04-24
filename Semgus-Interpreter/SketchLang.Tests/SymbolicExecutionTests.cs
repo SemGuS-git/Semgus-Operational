@@ -93,7 +93,45 @@ void compare_In_0 (In_0 a, In_0 b, ref bit _out)/*manual_outer.sk:6*/
             Assert.AreEqual(clean, BitTernaryFlattener.Normalize(rough));
         }
 
+        [TestMethod]
+        public void ReturnsStruct() {
+            var fn = SketchParser.FunctionDefinition.Parse(@"
+something main(something a, ref something b, ref something c) {
+    b = new something(v0=3,v1=a.v1);
+    c = a;
+    global = b;
+    return new something(v0=b.v0,v1=b.v1);
+}
+");
+            var x = SymbolicInterpreter.Evaluate(fn);
 
+
+            Assert.AreEqual(
+                new StructNew(new("something"), new[] {
+                    Var("v0").Assign(new Literal(3)) ,
+                    Var("v1").Assign(Var("a.v1")),
+                }),
+                x.RefVariables[new("b")]
+            );
+
+            Assert.AreEqual(
+                Var("a"),
+                x.RefVariables[new("c")]
+            );
+
+            Assert.AreEqual(
+                x.RefVariables[new("b")],
+                x.Globals[new("global")]
+            );
+
+            Assert.AreEqual(
+                new StructNew(new("something"), new[] {
+                    Var("v0").Assign(new Literal(3)),
+                    Var("v1").Assign(Var("a.v1"))
+                }),
+                x.ReturnValue
+            );
+        }
         //[TestMethod]
         //public void New_compare_In_0() {
         //    var x = SymbolicInterpreter.Evaluate(new_compare_In_0, compare_In_0);

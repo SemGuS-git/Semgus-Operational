@@ -38,8 +38,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         private (StructType,StructType) GetIOStructs(SemgusTermType termType) => structs_by_term_type[termType.Name.Name.Symbol];
         private (StructType,StructType) GetIOStructs(string termTypeKey) => structs_by_term_type[termTypeKey];
-
-        public FunctionDefinition OpSemToFunction(Identifier id, ProductionRuleInterpreter prod, IReadOnlyList<IInterpretationStep> steps) {
+        
+        public (FunctionDefinition fn, StructType returnType) OpSemToFunction(Identifier id, ProductionRuleInterpreter prod, IReadOnlyList<IInterpretationStep> steps) {
             var (sem_input, sem_output) = GetIOStructs(prod.TermType);
 
             HashSet<string> inputVarNames = new(prod.InputVariables.Select(v => v.Name));
@@ -64,6 +64,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             bool f_input_includes_sem_input = false;
             List<Variable> f_child_output_tuples = new();
+            
 
             List<IStatement> statements = new();
 
@@ -109,7 +110,19 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             statements.Add(new ReturnStatement(sem_output.New(prod.OutputVariables.Select((v,i) => sem_output.Elements[i].Assign(nspace.VarMap[v.Name])))));
 
-            return new FunctionDefinition(new FunctionSignature(id, FunctionModifier.None, sem_output, f_input_includes_sem_input ? f_child_output_tuples.Prepend(f_input_tuple).ToList() : f_child_output_tuples), statements);
+            if (f_input_includes_sem_input) f_child_output_tuples.Insert(0, f_input_tuple);
+
+            return (
+                new FunctionDefinition(
+                    new FunctionSignature(
+                        sem_output,
+                        id,
+                        f_child_output_tuples
+                    ),
+                    statements
+                ),
+                sem_output
+            );
         }
 
     }

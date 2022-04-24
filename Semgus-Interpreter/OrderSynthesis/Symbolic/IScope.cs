@@ -15,10 +15,6 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
         void OnPop(ScopeStack stack);
 
         void Declare(Identifier id, IExpression expression);
-        void Assign(Identifier returnValueId, IExpression expression);
-        void Assign(ISettable subject, IExpression expression);
+        void Assign(Identifier id, IExpression expression);
     }
-
-
-
 }

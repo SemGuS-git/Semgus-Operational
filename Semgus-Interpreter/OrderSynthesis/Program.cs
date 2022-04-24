@@ -1,11 +1,8 @@
 ﻿#define NOT_REUSE
 
 using Semgus.CommandLineInterface;
-using Semgus.MiniParser;
 using Semgus.Operational;
-using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
-using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
 using Semgus.OrderSynthesis.Subproblems;
 using Sprache;
 using System.Diagnostics;
@@ -22,16 +19,34 @@ namespace Semgus.OrderSynthesis {
 
             FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{Path.GetFileName(file)}/");
 
-            var result = await RunPipeline(dir, file);
+            var result = await RunPipeline(dir, file, true);
 
         }
 
-        static async Task<PipelineState> RunPipeline(FlexPath dir, string input_file) {
-            if (Directory.Exists(dir.PathWin)) {
-                Directory.Delete(dir.PathWin, true);
-            }
-            Directory.CreateDirectory(dir.PathWin);
+        static async Task<PipelineState> RunPipeline(FlexPath dir, string input_file, bool reuse_previous = false) {
+            if (reuse_previous) {
+                if (!Directory.Exists(dir.PathWin)) throw new DirectoryNotFoundException(dir.PathWin);
+                var temp_storage_dir = dir.Append("../_temp/");
+                if (Directory.Exists(temp_storage_dir.PathWin)) throw new InvalidOperationException($"There's already a directory in our temp location {temp_storage_dir.PathWin}");
+                Directory.CreateDirectory(temp_storage_dir.PathWin);
 
+                var target_dir = dir.Append("step_1_mono/");
+                var subtargets = new[] { "input.sk", "result.sk", "result.holes.xml" };
+                foreach (var s in subtargets) {
+                    File.Copy(target_dir.Append(s).PathWin, temp_storage_dir.Append(s).PathWin);
+                }
+                Directory.Delete(dir.PathWin, true);
+                Directory.CreateDirectory(target_dir.PathWin);
+                foreach (var s in subtargets) {
+                    File.Copy(temp_storage_dir.Append(s).PathWin, target_dir.Append(s).PathWin);
+                }
+                Directory.Delete(temp_storage_dir.PathWin,true);
+            } else {
+                if (Directory.Exists(dir.PathWin)) {
+                    Directory.Delete(dir.PathWin, true);
+                }
+                Directory.CreateDirectory(dir.PathWin);
+            }
             PipelineState? state = null;
 
             try {
@@ -40,9 +55,9 @@ namespace Semgus.OrderSynthesis {
 
                     var step = MonotonicityStep.FromSemgusGrammar(items.Grammar); // May throw
 
-                    state = new(PipelineState.Step.Initial, LibFunctions.PrimTypes.Concat(step.Structs).ToDictionary(s => s.Id), step.Structs);
+                    state = new(PipelineState.Step.Initial, step.StructTypeMap, step.Structs);
 
-                    var result = await step.Execute(dir.Append("step_1_mono/")); // May throw
+                    var result = await step.Execute(dir.Append("step_1_mono/"),reuse_previous); // May throw
 
                     state = state with {
                         Reached = PipelineState.Step.Monotonicity,
@@ -59,7 +74,7 @@ namespace Semgus.OrderSynthesis {
 
                 try {
 
-                    var step = new SimplificationStep(state.Structs, state.Comparisons);
+                    var step = new SimplificationStep(new(state.StructTypeMap, state.StructTypeList, state.Comparisons));
                     var result = await step.Execute(dir.Append("step_3_simplify/"));
                     state = state with { Reached = PipelineState.Step.Simplification, Comparisons = result.Comparisons };
 
@@ -70,14 +85,14 @@ namespace Semgus.OrderSynthesis {
                 }
 
                 {
-                    var step = new LatticeStep(state.Structs.Zip(state.Comparisons!));
+                    var step = new LatticeStep(state.StructTypeList.Zip(state.Comparisons!));
                     var result = await step.Execute(dir.Append("step_4_lattice/"));
                     state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };
                 }
 
 
                 // TODO: load compares and monotonicities into abstract interpretation framework
-                await WriteState(dir.Append("result/"), state);
+                await PipelineUtil.WriteState(dir.Append("result/"), state);
 
                 Console.WriteLine("--- Pipeline finished ---");
                 return state;
@@ -86,122 +101,12 @@ namespace Semgus.OrderSynthesis {
                 Console.Error.Write("Halting");
                 if (state is not null) {
                     var stash = dir.Append("incomplete_result/");
-                    Directory.CreateDirectory(stash.PathWin);
-                    await WriteState(stash, state);
+                    await PipelineUtil.WriteState(stash, state);
                 }
                 throw;
             }
 
         }
 
-        record MonoOutputLine(string Alias, IReadOnlyList<Monotonicity> Labels);
-
-        static async Task WriteState(FlexPath path, PipelineState state) {
-            File.WriteAllText(path.Append("step_reached.txt").PathWin, state.Reached.ToString());
-
-            if (state.Comparisons is not null) {
-                PipelineUtil.WriteSketchFile(path.Append("comparisons.sk"), state.Comparisons);
-            }
-            if (state.AllMonotonicities is not null) {
-                var obj = new SortedDictionary<string, MonoOutputLine>();
-                foreach (var a in state.AllMonotonicities) {
-                    obj.Add(a.Function.Id.ToString(), new(a.Function.Alias!, a.ArgMonotonicities));
-                }
-                using var fs = File.OpenRead(path.Append("monotonicities.json").PathWin);
-
-                await JsonSerializer.SerializeAsync(fs, obj);
-            }
-            if (state.Lattices is not null) {
-                PipelineUtil.WriteSketchFile(path.Append("lattices.sk"), state.Lattices.SelectMany(l => l.GetEach()));
-            }
-        }
-    }
-
-    internal static class PipelineUtil {
-        public static void WriteSketchFile(FlexPath path, IEnumerable<IStatement> content) {
-            using StreamWriter sw = new(path.PathWin);
-            LineReceiver receiver = new(sw);
-
-            foreach (var a in content) {
-                a.WriteInto(receiver);
-            }
-        }
-
-        public static IReadOnlyList<FunctionDefinition> ReadSelectedFunctions(string text, IEnumerable<Identifier> targets) {
-            var indexMap = targets.Select((t, i) => (t, i)).ToDictionary(u => u.t, u => u.i);
-
-            var (head, body, foot) = SketchSyntaxParser.StripHeaders(text).Unwrap();
-
-            var parsed = SketchSyntaxParser.Instance.FileContent.Symbol.ParseString(body).Unwrap();
-
-            var raw = parsed.Where(st => st is FunctionDefinition fd && targets.Contains(fd.Id)).Cast<FunctionDefinition>();
-
-            var ordered = new FunctionDefinition[indexMap.Count];
-
-            foreach (var fd in raw) {
-                ordered[indexMap.Remove(fd.Id, out var idx) ? idx : throw new KeyNotFoundException()] = fd;
-            }
-
-            if (indexMap.Count != 0) {
-                throw new KeyNotFoundException();
-            }
-            return ordered;
-        }
-
-        // note: this doesn't work for return statements in inner scopes.
-        public static FunctionDefinition SloppyFunctionalize(FunctionDefinition function) {
-            var sig_functional = function.Signature.AsFunctional(out var refVarId);
-
-            if (refVarId is null) {
-                return function;
-            }
-
-            // Declare the out variable at the start, and then insert it into all return statements
-
-            var adjusted = function.Body.Select(stmt => stmt is ReturnStatement ? new ReturnStatement(new VariableRef(refVarId)) : stmt);
-
-            adjusted = adjusted.Prepend(new WeakVariableDeclaration(sig_functional.ReturnTypeId, refVarId));
-
-
-            return new FunctionDefinition(sig_functional, adjusted.ToList());
-        }
-
-        delegate IStatement productor(IExpression value);
-
-
-        public static FunctionDefinition Compactify(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
-            var (raw_output, pro) = CompactifyInner(function, available);
-
-            var norm_1 = BitTernaryFlattener.Normalize(raw_output);
-
-            return function with { Body = new[] { pro(norm_1) } };
-
-            //return new FunctionDefinition(sig_functional, pro(norm_1))
-
-            //var norm_2 = NegationNormalForm.Normalize(norm_1);
-            //var norm_3 = DisjunctiveNormalForm.Normalize(norm_2);
-        }
-
-        private static (IExpression,productor) CompactifyInner(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> available) {
-            function.Signature.AsFunctional(out var refVarId);  // todo strip this down
-            var eval_result = SymbolicInterpreter.Evaluate(function, available);
-
-            IExpression raw_output;
-
-            if (refVarId is null) {
-                raw_output = eval_result.ReturnValue;
-                return (raw_output, e => new ReturnStatement(e));
-            } else {
-                raw_output = eval_result.RefVariables[refVarId];
-                return (raw_output, e => new Assignment(new VariableRef(refVarId), e));
-            }
-        }
-
-        public static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, params FunctionDefinition[] available) => Compactify(input, (IEnumerable<FunctionDefinition>)available);
-
-        public static IReadOnlyList<FunctionDefinition> Compactify(IReadOnlyList<FunctionDefinition> input, IEnumerable<FunctionDefinition> available) {
-            var functionMap = available.ToDictionary(k => k.Id);
-            return input.Select(fn => Compactify(fn, functionMap)).ToList();
-        }
     }
 }

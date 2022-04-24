@@ -351,18 +351,18 @@ namespace Semgus.SketchLang.Tests {
 
         /***** WeakFunctionSignature ******/
         static IEnumerable<object[]> WeakFunctionSignatureCases => new[] {
-            new object[] { " int mul (int x, int y, ref bit flag)", new WeakFunctionSignature(
-                FunctionModifier.None, new("int"), new("mul"), new IVariableInfo[] {
+            new object[] { " int mul (int x, int y, ref bit flag)", new FunctionSignature(
+                FunctionModifier.None, IntType.Id, new("mul"), new IVariableInfo[] {
                     VDec("int", "x"),
                     VDec("int", "y"),
                     new RefVariableDeclaration(VDec("bit", "flag"))
                 })
             },
-            new object[] { " generator bit t(\n)", new WeakFunctionSignature(
-                FunctionModifier.Generator, new("bit"), new("t"), Array.Empty<IVariableInfo>() )
+            new object[] { " generator bit t(\n)", new FunctionSignature(
+                FunctionModifier.Generator, BitType.Id, new("t"), Array.Empty<IVariableInfo>() )
             },
-            new object[] { " generator bit t(\n) implements __mu_iota", new WeakFunctionSignature(
-                FunctionModifier.Generator, new("bit"), new("t"), Array.Empty<IVariableInfo>()
+            new object[] { " generator bit t(\n) implements __mu_iota", new FunctionSignature(
+                FunctionModifier.Generator, BitType.Id, new("t"), Array.Empty<IVariableInfo>()
                 ){ImplementsId=new("__mu_iota")}
             },
         };
@@ -765,9 +765,9 @@ bit compare_Out_0 (Out_0 a, Out_0 b) //ok
 
 ",
                 new FunctionDefinition(
-                    new WeakFunctionSignature(
+                    new FunctionSignature(
                         FunctionModifier.None,
-                        new("bit"),
+                        BitType.Id,
                         new("compare_Out_0"),
                         new[]{VDec("Out_0","a"),VDec("Out_0","b") }
                     ),
@@ -785,9 +785,9 @@ bit compare_Out_0 (Out_0 a, Out_0 b) //ok
 harness void main() /*test*/ { assert(0); return; } //ok
 ",
                 new FunctionDefinition(
-                    new WeakFunctionSignature(
+                    new FunctionSignature(
                         FunctionModifier.Harness,
-                        new("void"),
+                        VoidType.Id,
                         new("main"),
                         Array.Empty<IVariableInfo>()
                     ),
@@ -805,9 +805,9 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
 ",
                 new FunctionDefinition(
 
-                    new WeakFunctionSignature(
+                    new FunctionSignature(
                         FunctionModifier.Harness,
-                        new("void"),
+                        VoidType.Id,
                         new("main"),
                         new[]{VDec("int","Out_0_s0_v0"), VDec("int", "Out_0_s0_v1") }
                     ),
@@ -815,7 +815,7 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
                     new ReturnStatement()
                 ),
             },
-            new object[]{@"void main() /*aa*/ { }" , new FunctionDefinition(new WeakFunctionSignature(FunctionModifier.None,VoidType.Id,new("main"),Array.Empty<IVariableInfo>())) }
+            new object[]{@"void main() /*aa*/ { }" , new FunctionDefinition(new FunctionSignature(FunctionModifier.None,VoidType.Id,new("main"),Array.Empty<IVariableInfo>())) }
         };
 
         [DataTestMethod]

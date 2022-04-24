@@ -22,21 +22,21 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             this.Id = id;
             this.Elements = elements;
 
-            CompareId = new("compare_" + id.Name);
-            EqId = new("eq_" + id.Name);
-            DisjunctId = new("disjunct_" + id.Name);
-            NonEqId = new("non_eq_" + id.Name);
+            CompareId = new($"compare_{id}");
+            EqId = new($"eq_{id}");
+            DisjunctId = new($"disjunct_{id}");
+            NonEqId = new($"non_eq_{id}");
         }
 
         public override string ToString() => Id.ToString();
 
-        public StructDefinition GetStructDef() => new StructDefinition(Id, Elements) { Comment = Comment };
+        public StructDefinition GetStructDef() => new(Id, Elements) { Comment = Comment };
 
         public FunctionDefinition GetEqualityFunction() {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(EqId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
+            return new FunctionDefinition(new FunctionSignature(BitType.Id, EqId, new[] { var_a, var_b }),
                 new ReturnStatement(
                     new InfixOperation(Op.And,
                         Elements.Select(e => Op.Eq.Of(var_a.Get(e), var_b.Get(e))).ToList()
@@ -50,10 +50,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(CompareId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
+            return new FunctionDefinition(new FunctionSignature(BitType.Id, CompareId, new[] { var_a, var_b }),
                 new VariableDeclaration(var_leq, X.L0),
                 new RepeatStatement(new Hole(),
-                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
+                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a, var_b)))
                 ),
                 new ReturnStatement(var_leq.Ref())
             );
@@ -64,12 +64,12 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(CompareId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
-                new VariableDeclaration(var_leq, prevId.Call(var_a.Ref(),var_b.Ref())),
+            return new FunctionDefinition(new FunctionSignature(BitType.Id, CompareId, new[] { var_a, var_b }),
+                var_leq.Declare(prevId.Call(var_a, var_b)),
                 new RepeatStatement(budget.Ref(),
-                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
+                    var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a, var_b)))
                 ),
-                new ReturnStatement(var_leq.Ref())
+                X.Return(var_leq.Ref())
             );
         }
 
@@ -78,12 +78,12 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(CompareId, FunctionModifier.None, BitType.Instance, new[] { var_a, var_b }),
-                new VariableDeclaration(var_leq, X.L0),
+            return new FunctionDefinition(new FunctionSignature(BitType.Id, CompareId, new[] { var_a, var_b }),
+                var_leq.Declare(X.L0),
                 new RepeatStatement(budget.Ref(),
                     var_leq.Assign(Op.Or.Of(var_leq.Ref(), DisjunctId.Call(var_a.Ref(), var_b.Ref())))
                 ),
-                new ReturnStatement(var_leq.Ref())
+                X.Return(var_leq.Ref())
             );
         }
 
@@ -92,9 +92,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(DisjunctId, FunctionModifier.Generator, BitType.Instance, new[] { var_a, var_b }),
-                new ReturnStatement(
-                    new InfixOperation(Op.And, Elements.Select(e =>
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Generator, BitType.Id, DisjunctId, new[] { var_a, var_b }),
+                X.Return(
+                    Op.And.Of(Elements.Select(e =>
                         GetAtomFunctionId(e.Type).Call(var_a.Get(e), var_b.Get(e))
                     ).ToList())
                 )
@@ -111,11 +111,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Variable var_a = new("a", this);
             Variable var_b = new("b", this);
 
-            return new FunctionDefinition(new FunctionSignature(NonEqId, FunctionModifier.Harness, VoidType.Instance, Array.Empty<Variable>()),
-                new VariableDeclaration(var_a, this.New(Elements.Select(e => e.Assign(new Hole())))),
-                new VariableDeclaration(var_b, this.New(Elements.Select(e => e.Assign(new Hole())))),
-                new AssertStatement(this.NotEqual(var_a, var_b)),
-                new AssertStatement(this.Compare(var_a, var_b))
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, NonEqId, Array.Empty<Variable>()),
+                var_a.Declare(this.NewFromHoles()),
+                var_a.Declare(this.NewFromHoles()),
+                X.Assert(X.Not(EqId.Call(var_a, var_b))),
+                X.Assert(CompareId.Call(var_a, var_b))
             );
         }
 
@@ -126,8 +126,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             yield return new AssertStatement(
                 Op.Eq.Of(
                     Op.And.Of(
-                        this.Compare(a, b),
-                        this.Compare(b, a)
+                        CompareId.Call(a, b),
+                        CompareId.Call(b, a)
                     ),
                     this.Equal(a, b)
                 )
@@ -135,7 +135,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
 
             yield return new Annotation($"{a.Type}: transitivity");
             yield return new AssertStatement(
-                Op.Or.Of(this.NotCompare(a, b), this.NotCompare(b, c), this.Compare(a, c))
+                Op.Or.Of(
+                    X.Not(CompareId.Call(a, b)),
+                    X.Not(CompareId.Call(b, c)),
+                    CompareId.Call(a, c)
+                )
             );
         }
     }

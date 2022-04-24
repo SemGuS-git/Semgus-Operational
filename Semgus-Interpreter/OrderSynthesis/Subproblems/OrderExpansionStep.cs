@@ -2,26 +2,32 @@
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.Util;
+using Semgus.Util.Misc;
+using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal class OrderExpansionStep {
+        public record Config(
+            IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
+            IReadOnlyList<StructType> StructTypeList,
+            IReadOnlyList<MonotoneLabeling> MonotoneFunctions,
+            IReadOnlyList<FunctionDefinition> PrevComparisons
+        );
+
         public int Iter { get; }
+        public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyList<MonotoneLabeling> MonotoneFunctions { get; }
         public IReadOnlyList<FunctionDefinition> PrevComparisons { get; }
         public IReadOnlyList<Variable> Budgets { get; private set; }
 
-        public OrderExpansionStep(int iter, IReadOnlyList<StructType> structs, IReadOnlyList<MonotoneLabeling> monotoneFunctions, IReadOnlyList<FunctionDefinition> prevComparisons) {
+        public OrderExpansionStep(int iter, Config config) {
             Iter = iter;
-            Structs = structs;
-            MonotoneFunctions = monotoneFunctions;
-            PrevComparisons = prevComparisons;
+            (StructTypeMap, Structs, MonotoneFunctions, PrevComparisons) = config;
 
-            Budgets = structs.Select(s => new Variable("budget_" + s.Name, IntType.Instance)).ToList();
+            Budgets = Structs.Select(s => new Variable("budget_" + s.Name, IntType.Instance)).ToList();
 
-            if (prevComparisons.Any(f => f.Signature is not FunctionSignature sig || sig.Args[0].Type is not StructType st || sig.Id == st.CompareId)) {
-                throw new ArgumentException();
-            }
+            Debug.Assert(PrevComparisons.All(f => StructTypeMap.TryGetValue(f.Signature.Args[0].TypeId, out var st) && f.Signature.Id != st.CompareId));
         }
 
         public IEnumerable<IStatement> GetFile() {
@@ -51,7 +57,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public FunctionDefinition GetMain() {
-            var clasps = Clasp.GetAll(MonotoneFunctions.Select(f => f.Function.Signature).Cast<FunctionSignature>());
+            var clasps = Clasp.GetAll(StructTypeMap, MonotoneFunctions.Select(f => f.Function.Signature));
 
             List<IStatement> body = new();
 
@@ -84,7 +90,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new MinimizeStatement(Op.Plus.Of(Budgets.Select(b => b.Ref()).ToList())));
 
-            return new FunctionDefinition(new FunctionSignature(new("main"), FunctionModifier.Harness, VoidType.Instance, input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main"), input_args), body);
         }
 
         private static IEnumerable<IStatement> GetExpansionAssertions(StructType type, Variable budget, Identifier prev, Variable expFlag) {
@@ -102,17 +108,18 @@ namespace Semgus.OrderSynthesis.Subproblems {
             ));
         }
 
-        private static IEnumerable<IStatement> GetMonoAssertions(IReadOnlyDictionary<Identifier, Clasp> clasps, MonotoneLabeling labeled) {
+        private IEnumerable<IStatement> GetMonoAssertions(IReadOnlyDictionary<Identifier, Clasp> clasps, MonotoneLabeling labeled) {
             var fn = labeled.Function;
+            var sig = fn.Signature;
             var labels = labeled.ArgMonotonicities;
-            if (fn.Signature is not FunctionSignature sig || sig.ReturnType is not StructType type_out) throw new NotSupportedException();
+            if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
 
             List<VariableRef> fixed_args = new();
 
             {
                 Counter<Identifier> vcount = new();
                 foreach (var v in sig.Args) {
-                    var key = v.Type.Id;
+                    var key = v.TypeId;
                     fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
                     vcount.Increment(key);
                 }
@@ -121,8 +128,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
 
             for (int i = 0; i < sig.Args.Count; i++) {
-                if (sig.Args[i].Type is not StructType type_i) throw new NotSupportedException();
-
+                if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
 
                 if (labels[i] == Monotonicity.None) {
                     yield return new Annotation($"Argument {i}: no monotonicity");
@@ -138,12 +144,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 switch (labels[i]) {
                     case Monotonicity.Increasing:
                         yield return new AssertStatement(
-                            type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(fixed_args), fn.Call(alt_args)))
+                            type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
                         );
                         break;
                     case Monotonicity.Decreasing:
                         yield return new AssertStatement(
-                            type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(alt_args), fn.Call(fixed_args)))
+                            type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
                         );
                         break;
                 }
@@ -156,13 +162,26 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             const int MAX_REFINEMENT_STEPS = 100;
 
+            //public FunctionSignature AsRichSignature(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null)
+            //    => new(
+            //        Flag,
+            //        typeDict[ReturnTypeId],
+            //        replacement_id ?? Id,
+            //        Args.Select(
+            //            a => a is RefVariableDeclaration ?
+            //            throw new InvalidOperationException() :
+            //            new Variable(a.Id, typeDict[a.TypeId])
+            //        ).ToList()
+            //    ) { ImplementsId = this.ImplementsId };
+
+
             int i = 0;
             for (; i < MAX_REFINEMENT_STEPS; i++) {
                 prev_compare = comparisons
-                    .Select(c => c with { Signature = c.Signature.AsRichSignature(state.TypeMap, new("prev_" + c.Id.Name)) })
+                    .Select(c => c with { Signature = c.Signature with { Id = new("prev_" + c.Id.Name) } })
                     .ToList();
 
-                var refinement_step = new OrderExpansionStep(i, state.Structs, state.MonotoneFunctions, prev_compare);
+                var refinement_step = new OrderExpansionStep(i, new(state.StructTypeMap, state.StructTypeList, state.MonotoneFunctions, prev_compare));
 
                 var dir_refinement = dir.Append($"iter_{i}/");
 
@@ -215,9 +234,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Console.WriteLine($"--- [Refinement {Iter}] Transforming compare functions ---");
 
+            var (to_compact, to_reference) = extracted_functions.GetEnumerator().Partition(f => compare_ids.Contains(f.Id)).ReadToLists();
+
             IReadOnlyList<FunctionDefinition> compacted;
             try {
-                compacted = PipelineUtil.Compactify(extracted_functions.Where(f => compare_ids.Contains(f.Id)).ToList(), this.PrevComparisons);
+                compacted = PipelineUtil.ReduceEachToSingleExpression(to_compact, to_reference);
             } catch (Exception) {
                 Console.WriteLine($"--- Failed to transform all comparison functions; halting ---");
                 throw;

@@ -4,8 +4,8 @@ using Semgus.OrderSynthesis.SketchSyntax;
 namespace Semgus.OrderSynthesis.Subproblems {
     internal record PipelineState(
         PipelineState.Step Reached,
-        IReadOnlyDictionary<Identifier, IType> TypeMap,
-        IReadOnlyList<StructType> Structs,
+        IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
+        IReadOnlyList<StructType> StructTypeList,
         IReadOnlyList<FunctionDefinition>? Comparisons,
         IReadOnlyList<MonotoneLabeling>? MonotoneFunctions,
         IReadOnlyList<MonotoneLabeling>? AllMonotonicities,
@@ -18,6 +18,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Initial,
             Lattice,
         }
-        public PipelineState(Step reached, IReadOnlyDictionary<Identifier, IType> typeMap, IReadOnlyList<StructType> structs) : this(reached, typeMap, structs, null, null, null, null) { }
+        public PipelineState(
+            Step reached,
+            IReadOnlyDictionary<Identifier, StructType> structTypeMap,
+            IReadOnlyList<StructType> structTypeList
+        ) : this(reached, structTypeMap, structTypeList, null, null, null, null) { }
+
     }
 }

@@ -11,6 +11,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         public static Identifier GetTypeId(this UnaryOp op) => op switch {
             UnaryOp.Not => BitType.Id,
             UnaryOp.Minus => IntType.Id,
+
+            _ => throw new ArgumentOutOfRangeException(),
         };
 
         public static string Str(this Op op) => op switch {

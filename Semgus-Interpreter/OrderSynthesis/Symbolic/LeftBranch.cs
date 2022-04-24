@@ -13,6 +13,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
 
         public override void OnPop(ScopeStack stack) {
             Debug.Assert(PendingStack.Count == 0);
+            
+            // Unflatten locally assigned / defined struct values
+            BakeAllStructVars();
 
             var parent = stack.Peek();
 

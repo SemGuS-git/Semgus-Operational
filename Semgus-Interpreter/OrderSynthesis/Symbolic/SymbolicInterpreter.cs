@@ -9,6 +9,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
         public static Result Evaluate(FunctionDefinition function, IReadOnlyDictionary<Identifier, FunctionDefinition> functionMap) {
             ScopeStack stack = new(functionMap);
             var root = new RootScope(function);
+            root.Initialize(function);
+
             stack.Push(root);
 
             while (stack.TryPeek(out var frame)) {
@@ -27,9 +29,22 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
                 }
             }
 
+            if (root.Result is null) throw new NullReferenceException();
+
+            AssertNoPlaceholders(root.Result);
+
             return root.Result;
         }
 
+        private static void AssertNoPlaceholders(Result result) {
+            if (result.ReturnValue is StructValuePlaceholder)
+                throw new Exception("Symbolic interpreter returning a placeholder value");
+
+            foreach (var e in result.RefVariables.Concat(result.Globals))
+                if (e.Value is StructValuePlaceholder)
+                    throw new Exception($"Symbolic interpreter returning with a placeholder value at variable {e.Key}");
+
+        }
 
         static void ProcessExpression(ScopeStack stack, IScope frame, IExpression expr) {
             switch (expr) {

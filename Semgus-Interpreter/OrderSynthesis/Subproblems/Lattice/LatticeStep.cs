@@ -1,5 +1,6 @@
 ﻿using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
+using Semgus.OrderSynthesis.SketchSyntax.Sugar;
 using Semgus.OrderSynthesis.Subproblems.LatticeSubstep;
 using System;
 using System.Collections.Generic;
@@ -35,15 +36,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Dictionary<Identifier, FunctionDefinition> final = new();
 
             foreach (var generator in new ILatticeSubstep[] { gen_top, gen_bot, gen_join, gen_meet }) {
-                System.Console.WriteLine($"--- [Lattice] doing {generator.TargetId} for {type.Id} ---");
+                System.Console.WriteLine($"--- [Lattice] doing {generator.SynthFunId} for {type.Id} ---");
 
-                var base_path = dir.Append($"{generator.TargetId}");
+                var base_path = dir.Append($"{generator.SynthFunId}");
 
                 var content = generator.GetInitialFile();
 
                 var current_zone = base_path.Append("_init/");
 
-                FunctionDefinition? current = null;
+                FunctionDefinition? synth_item = null;
 
                 const int MAX_ITER = 100;
                 for (int i = 0; i < MAX_ITER; i++) {
@@ -58,24 +59,24 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         break;
                     }
 
-                    current = await ReadTarget(file_out, generator.TargetId);
-                    content = generator.GetRefinementFile(current);
+                    synth_item = await ReadTarget(file_out, generator.SynthFunId);
+                    content = generator.GetRefinementFile(synth_item.RenamedTo(new("prev_" + synth_item.Id)));
                     current_zone = base_path.Append($"_{i}/");
                 }
 
-                if (current is null) {
+                if (synth_item is null) {
                     throw new Exception("Failed to complete initial sketch step");
                 } else {
-                    final.Add(generator.TargetId, current);
+                    final.Add(generator.SynthFunId, PipelineUtil.ReduceToSingleExpression(synth_item));
                 }
             }
 
             return new(
                 type,
-                final[gen_top.TargetId],
-                final[gen_bot.TargetId],
-                final[gen_join.TargetId],
-                final[gen_meet.TargetId]
+                final[gen_top.SynthFunId],
+                final[gen_bot.SynthFunId],
+                final[gen_join.SynthFunId],
+                final[gen_meet.SynthFunId]
             );
         }
 

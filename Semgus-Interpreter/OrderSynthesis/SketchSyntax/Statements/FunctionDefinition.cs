@@ -2,11 +2,11 @@
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
 
-    internal record FunctionDefinition (IFunctionSignature Signature, IReadOnlyList<IStatement> Body)  : IStatement  {
+    internal record FunctionDefinition (FunctionSignature Signature, IReadOnlyList<IStatement> Body)  : IStatement  {
         public string? Alias { get; set; } = null;
         public Identifier Id => Signature.Id;
 
-        public FunctionDefinition(IFunctionSignature signature, params IStatement[] body) : this(signature, body.ToList()) { }
+        public FunctionDefinition(FunctionSignature signature, params IStatement[] body) : this(signature, body.ToList()) { }
 
 
         public void WriteInto(ILineReceiver lineReceiver) {

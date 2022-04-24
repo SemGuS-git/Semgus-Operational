@@ -6,9 +6,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
     namespace LatticeSubstep {
         internal class TopOrBot : ILatticeSubstep {
             public bool IsTopElseBot { get; }
-            public Identifier TargetId { get; }
+            private string Which { get; }
+            public Identifier SynthFunId { get; }
             public StructType Subject { get; }
             public FunctionDefinition Compare { get; }
+            private FunctionDefinition SynthGenerator { get; }
+
             static FunctionDefinition AtomBit { get; }
                 = new(new FunctionSignature(FunctionModifier.Generator, BitType.Instance, new Identifier("fixed_atom_bit"), Array.Empty<Variable>()),
                     X.Return(new Hole())
@@ -33,21 +36,14 @@ namespace Semgus.OrderSynthesis.Subproblems {
             };
 
 
-            FunctionDefinition SynthesisTarget { get; }
-            
-
-            FunctionEval BoundCheck(FunctionDefinition bfn, Variable x) =>
-                IsTopElseBot
-                ? Compare.Call(x.Ref(), bfn.Call())
-                : Compare.Call(bfn.Call(), x.Ref());
-
             public TopOrBot(bool isTopElseBot, StructType subject, FunctionDefinition compare) {
                 this.IsTopElseBot = isTopElseBot;
-                this.TargetId = new(isTopElseBot ? "top" : "bot");
+                this.Which = isTopElseBot ? "top" : "bot";
+                this.SynthFunId = new($"{subject.Id.Name}_{Which}");
                 this.Subject = subject;
                 this.Compare = compare;
 
-                SynthesisTarget = new FunctionDefinition(new FunctionSignature(FunctionModifier.None, subject, TargetId, Array.Empty<Variable>()),
+                SynthGenerator = new FunctionDefinition(new FunctionSignature(subject, SynthFunId, Array.Empty<Variable>()),
                     X.Return(
                         new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.Type).Call())).ToList())
                     )
@@ -55,53 +51,58 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             public IEnumerable<IStatement> GetInitialFile() {
-
-                var fixed_atom_bit = AtomBit;
-                var fixed_atom_int = AtomInt;
-
-                FunctionDefinition next = SynthesisTarget;
-
                 var a = new Variable("a", Subject);
-                var test_bounds = new FunctionDefinition(new FunctionSignature(FunctionModifier.None, VoidType.Instance, new("test_bounds"), new[] { a }),
-                    X.Assert(BoundCheck(next, a))
+
+                var check_bound = IsTopElseBot
+                    ? Compare.Call(a.Ref(), SynthGenerator.Call())  // variable <= TOP
+                    : Compare.Call(SynthGenerator.Call(), a.Ref()); // BOT <= variable
+
+
+                var assert_bound_holds = new FunctionDefinition(new FunctionSignature(VoidType.Instance, new($"test_{Which}"), new[] { a }),
+                    X.Assert(check_bound)
                 );
 
-                var main_bounds = Shared.GetMain(test_bounds, a);
+                var bound_holds_forall = Shared.GetForallTestHarness(assert_bound_holds, a);
 
                 yield return Subject.GetStructDef();
                 yield return Compare;
-                yield return fixed_atom_bit;
-                yield return fixed_atom_int;
-                yield return next;
-                yield return test_bounds;
-                yield return main_bounds;
+                yield return AtomBit;
+                yield return AtomInt;
+                yield return SynthGenerator;
+                yield return assert_bound_holds;
+                yield return bound_holds_forall;
             }
 
             public IEnumerable<IStatement> GetRefinementFile(FunctionDefinition prev) {
-                var fixed_atom_bit = AtomBit;
-                var fixed_atom_int = AtomInt;
-
-                FunctionDefinition next = SynthesisTarget;
-
-                var a = new Variable("a", Subject);
-
-                var test_bounds = new FunctionDefinition(new FunctionSignature(FunctionModifier.None, VoidType.Instance, new("test_bounds"), new[] { a }),
-                    X.Assert(X.Not(BoundCheck(prev, a))),
-                    X.Assert(BoundCheck(next, a))
-                );
-
-                var main_bounds = Shared.GetRefinementMain(test_bounds);
-
-                yield return Subject.GetStructDef();
-                yield return Compare;
-                yield return fixed_atom_bit;
-                yield return fixed_atom_int;
+                foreach (var st in GetInitialFile()) {
+                    yield return st;
+                }
                 yield return prev;
-                yield return next;
-                yield return test_bounds;
-                yield return main_bounds;
+                yield return GetImproveHarness(prev);
             }
 
+            FunctionDefinition GetImproveHarness(FunctionDefinition prev_def) {
+                Variable prev_val = new($"prev_{Which}", Subject);
+                Variable next_val = new($"next_{Which}", Subject);
+
+                IExpression is_tighter_bound = IsTopElseBot
+                    // next_top < prev_top
+                    ? Op.And.Of(
+                        Compare.Call(next_val, prev_val),
+                        X.Not(Compare.Call(prev_val, next_val))
+                    )
+                    // next_bot < prev_bot
+                    : (IExpression)Op.And.Of(
+                        Compare.Call(prev_val, next_val),
+                        X.Not(Compare.Call(next_val, prev_val))
+                    );
+
+                return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Instance, new($"improve_{Which}"), Array.Empty<IVariableInfo>()),
+                    prev_val.Declare(prev_def.Call()),
+                    next_val.Declare(SynthGenerator.Call()),
+                    X.Assert(is_tighter_bound)
+                );
+            }
         }
     }
 }

@@ -13,6 +13,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             Debug.Assert(PendingStack.Count == 0);
 
             var parent = stack.Peek();
+
+            // Unflatten locally assigned / defined struct values
+            BakeAllStructVars();
+
             var workList = new Dictionary<Identifier, IExpression>(GetSideEffectAssigns());
 
             foreach (var kvp in _left.GetSideEffectAssigns()) {

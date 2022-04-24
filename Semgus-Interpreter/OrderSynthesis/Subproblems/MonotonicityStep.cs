@@ -6,14 +6,19 @@ using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal class MonotonicityStep {
-
         public IReadOnlyList<StructType> Structs { get; }
+        public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
 
         private IReadOnlyList<FunctionDefinition> NonMonotoneFunctions { get; }
 
-        public MonotonicityStep(IReadOnlyList<StructType> structs, IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions, IReadOnlyList<FunctionDefinition> nonMonotoneFunctions) {
+        public MonotonicityStep(
+            IReadOnlyList<StructType> structs,
+            IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions,
+            IReadOnlyList<FunctionDefinition> nonMonotoneFunctions
+        ) {
             Structs = structs;
+            StructTypeMap = structs.ToDictionary(s => s.Id);
             MaybeMonotoneFunctions = maybeMonotoneFunctions;
             NonMonotoneFunctions = nonMonotoneFunctions;
         }
@@ -33,10 +38,10 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             foreach (var sem in all_sem) {
-                var fn = converter.OpSemToFunction(new($"lang_f{functions.Count+non_mono.Count}"), sem.ProductionRule, sem.Steps);
-                if (fn.Signature is not FunctionSignature sig) throw new NotSupportedException(); // Should never happen
-
+                var (fn, fn_return_type) = converter.OpSemToFunction(new($"lang_f{functions.Count + non_mono.Count}"), sem.ProductionRule, sem.Steps);
                 fn.Alias = sem.ProductionRule.ToString();
+
+                var sig = fn.Signature;
 
                 // skip constant functions, e.g. literals
                 if (sig.Args.Count == 0) {
@@ -46,9 +51,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 functions.Add(fn);
 
-                observed_struct_types.TryAdd(sig.ReturnType.Id, (StructType)sig.ReturnType);
+                observed_struct_types.TryAdd(sig.ReturnTypeId, fn_return_type);
                 foreach (var arg in sig.Args) {
-                    observed_struct_types.TryAdd(arg.Type.Id, (StructType)arg.Type);
+                    observed_struct_types.TryAdd(arg.TypeId, (StructType)((Variable)arg).Type);
                 }
             }
 
@@ -80,7 +85,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public FunctionDefinition GetMain() {
-            var clasps = Clasp.GetAll(MaybeMonotoneFunctions.Select(f => f.Signature).Cast<FunctionSignature>());
+            var clasps = Clasp.GetAll(StructTypeMap, MaybeMonotoneFunctions.Select(f => f.Signature));
 
             List<IStatement> body = new();
 
@@ -107,18 +112,19 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new MinimizeStatement(Op.Minus.Of(new Literal(n_mono_checks), n_mono.Ref())));
 
-            return new FunctionDefinition(new FunctionSignature(new("main"), FunctionModifier.Harness, VoidType.Instance, input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main"), input_args), body);
         }
 
-        private static IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<Identifier, Clasp> clasps, FunctionDefinition fn) {
-            if (fn.Signature is not FunctionSignature sig || sig.ReturnType is not StructType type_out) throw new NotSupportedException();
+        private IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<Identifier, Clasp> clasps, FunctionDefinition fn) {
+            var sig = fn.Signature;
+            if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
 
             List<VariableRef> fixed_args = new();
 
             {
                 Counter<Identifier> vcount = new();
                 foreach (var v in sig.Args) {
-                    var key = v.Type.Id;
+                    var key = v.TypeId;
                     fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
                     vcount.Increment(key);
                 }
@@ -127,7 +133,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
 
             for (int i = 0; i < sig.Args.Count; i++) {
-                if (sig.Args[i].Type is not StructType type_i) throw new NotSupportedException();
+                if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
 
                 var alt_i = clasps[type_i.Id].Alternate;
 
@@ -138,14 +144,16 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Id}_{i}"));
                 yield return mono_flag.IfEq(X.L0,
-                    new AssertStatement(
-                        type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(fixed_args), fn.Call(alt_args)))
+                    X.Assert(
+                        type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
+                            .Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
                     ),
                     n_mono.Assign(Op.Plus.Of(n_mono.Ref(), X.L1))
                 );
                 yield return mono_flag.IfEq(X.L1,
-                    new AssertStatement(
-                        type_i.Compare(fixed_args[i], alt_i.Ref()).Implies(type_out.Compare(fn.Call(alt_args), fn.Call(fixed_args)))
+                    X.Assert(
+                        type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
+                            .Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
                     ),
                     n_mono.Assign(Op.Plus.Of(n_mono.Ref(), X.L1))
                 );
@@ -174,26 +182,31 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<MonotoneLabeling> MonoFunctions, IReadOnlyList<FunctionDefinition> NonMonoFunctions);
 
-        public async Task<Output> Execute(FlexPath dir) {
-            Directory.CreateDirectory(dir.PathWin);
+        public async Task<Output> Execute(FlexPath dir, bool reuse_previous = false) {
             var file_in = dir.Append("input.sk");
             var file_out = dir.Append("result.sk");
             var file_holes = dir.Append("result.holes.xml");
             var file_mono = dir.Append("result.mono.json");
             var file_cmp = dir.Append("result.comparisons.sk");
 
-            System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
-            WriteSketchInputFile(file_in);
-
-            System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
-
-            var sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (sketch_result) {
-                Console.WriteLine($"--- [Initial] Sketch succeeded ---");
+            if (reuse_previous) {
+                System.Console.WriteLine($"--- [Initial] Reusing prior Sketch output from {file_out} ---");
             } else {
-                Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
-                throw new Exception("Sketch rejected");
+                Directory.CreateDirectory(dir.PathWin);
+
+                System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
+                WriteSketchInputFile(file_in);
+
+                System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
+
+                var sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
+
+                if (sketch_result) {
+                    Console.WriteLine($"--- [Initial] Sketch succeeded ---");
+                } else {
+                    Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
+                    throw new Exception("Sketch rejected");
+                }
             }
 
             Console.WriteLine($"--- [Initial] Extracting monotonicities ---");
@@ -206,11 +219,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Console.WriteLine($"--- [Initial] Reading compare functions ---");
 
             var compare_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), this.Structs.Select(s => s.CompareId));
+
             Debug.Assert(compare_functions.Count == this.Structs.Count, "Failed to extract all comparison functions; halting");
 
             Console.WriteLine($"--- [Initial] Transforming compare functions ---");
 
-            IReadOnlyList<FunctionDefinition> compacted = PipelineUtil.Compactify(compare_functions); // May throw
+            IReadOnlyList<FunctionDefinition> compacted = PipelineUtil.ReduceEachToSingleExpression(compare_functions); // May throw
 
             return new(compacted, mono, NonMonotoneFunctions);
         }

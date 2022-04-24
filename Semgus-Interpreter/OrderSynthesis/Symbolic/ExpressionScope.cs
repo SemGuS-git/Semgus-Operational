@@ -20,7 +20,9 @@
                     break;
                 case FunctionEval _invoc: // may also be inserted as a statement
                     if (stack.TryGetFunction(_invoc.Id, out var function)) {
-                        stack.Push(new InvocationScope(function, _invoc.Args, FlattenedTerms));
+                        var invo = new InvocationScope(function);
+                        invo.Initialize(function, _invoc.Args, FlattenedTerms);
+                        stack.Push(invo);
                     } else {
                         frame.ReceiveExpression(new FunctionEval(_invoc.Id, FlattenedTerms));
                     }
@@ -34,9 +36,19 @@
                 case PropertyAccess _prop:
                     frame.ReceiveExpression(FlattenedTerms[0] switch {
                         // e.g. global_variable.x
-                        VariableRef variable => stack.Resolve(new(string.Join('.', variable.TargetId, _prop.Key))),
+                        VariableRef variable
+                            => stack.Resolve(new(string.Join('.', variable.TargetId, _prop.Key))),
+
+                        // e.g. input_variable.x
+                        StructValuePlaceholder placeholder
+                            => stack.TryGetAssignedValue(new($"{placeholder.Id}.{_prop.Key}"), out var overwrite)
+                            ? overwrite
+                            : placeholder.Source.TryGetPropValue(_prop.Key, out var value) ? value : throw new KeyNotFoundException(),
+
                         // e.g. (new Pair(5,3)).x
-                        StructNew anonymous_struct_value => anonymous_struct_value.TryGetPropValue(_prop.Key, out var value) ? value : throw new KeyNotFoundException(),
+                        StructNew anonymous_struct_value
+                            => anonymous_struct_value.TryGetPropValue(_prop.Key,out var value) ? value : throw new KeyNotFoundException(),
+
                         // e.g. (new Pair(1,2) + new Pair(3,5)).x
                         _ => throw new NotSupportedException(),
                     });
@@ -57,7 +69,8 @@
                     frame.Declare(wvd.Id, FlattenedTerms[0]);
                     break;
                 case Assignment asn:
-                    frame.Assign(asn.Subject, FlattenedTerms[0]);
+                    if (asn.Subject is not VariableRef flat) throw new ArgumentException("All assignment targets must be flattened during symbolic evaluation");
+                    frame.Assign(flat.TargetId, FlattenedTerms[0]);
                     break;
             }
         }

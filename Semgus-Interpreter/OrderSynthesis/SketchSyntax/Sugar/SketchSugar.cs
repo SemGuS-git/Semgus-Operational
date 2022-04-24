@@ -53,8 +53,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Sugar {
         public static InfixOperation Implies(this Variable lhs, Variable rhs) => new(Op.Or, new UnaryOperation(UnaryOp.Not, lhs.Ref()), rhs.Ref());
         public static InfixOperation ImpliedBy(this Variable lhs, Variable rhs) => new(Op.Or, lhs.Ref(), new UnaryOperation(UnaryOp.Not, rhs.Ref()));
 
+
+        public static FunctionEval Call(this FunctionDefinition fn, Variable arg0, params Variable[] args) => new(fn.Id, args.Prepend(arg0).Select(a=>a.Ref()).ToList());
         public static FunctionEval Call(this FunctionDefinition fn, params IExpression[] args) => new(fn.Id, args);
         public static FunctionEval Call(this FunctionDefinition fn, IReadOnlyList<IExpression> args) => new(fn.Id, args);
+        public static FunctionEval Call(this Identifier fn_id, Variable arg0, params Variable[] args) => new(fn_id, args.Prepend(arg0).Select(a => a.Ref()).ToList());
         public static FunctionEval Call(this Identifier fn_id, params IExpression[] args) => new(fn_id, args);
         public static FunctionEval Call(this Identifier fn_id, IReadOnlyList<IExpression> args) => new(fn_id, args);
 
@@ -87,6 +90,16 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Sugar {
         public static VariableRef Ref(this Variable v) => new(v.Id);
 
         public static StructNew New(this StructType t, IEnumerable<Assignment> args) => new(t.Id, args.ToList());
+
+        public static StructNew NewFromHoles(this StructType t)
+            => new(t.Id, t.Elements.Select(
+                e => new Assignment(e.Ref(), new Hole())
+            ).ToList());
+
+    }
+
+    internal static class ConvenienceExtensions {
+        public static FunctionDefinition RenamedTo(this FunctionDefinition fn, Identifier id) => fn with { Signature = fn.Signature with { Id = id } };
     }
 
 }

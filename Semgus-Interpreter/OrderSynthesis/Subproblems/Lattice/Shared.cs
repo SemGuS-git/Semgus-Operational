@@ -32,31 +32,30 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 return (input_args, input_assembly_statements);
             }
 
-
-            public static FunctionDefinition GetMain(FunctionDefinition test, params Variable[] vars) {
+            public static FunctionDefinition GetForallTestHarness(FunctionDefinition test, params Variable[] vars) {
                 List<IStatement> body = new();
                 var (input_args, input_assembly_statements) = GetMainInitContent(vars);
 
                 body.AddRange(input_assembly_statements);
                 body.Add(test.Call(vars.Select(v => v.Ref()).ToList()));
 
-                return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main_" + test.Id.Name), input_args), body);
+                return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("forall_" + test.Id.Name), input_args), body);
             }
 
-            public static FunctionDefinition GetRefinementMain(FunctionDefinition test, params Variable[] vars) {
-                List<IStatement> body = new();
+            //public static FunctionDefinition GetRefinementMain(FunctionDefinition test, params Variable[] vars) {
+            //    List<IStatement> body = new();
 
-                var (input_args, input_assembly_statements) = GetMainInitContent(vars);
+            //    var (input_args, input_assembly_statements) = GetMainInitContent(vars);
 
-                body.AddRange(input_args.Select(var =>
-                    var.Declare(new Hole())
-                ));
+            //    body.AddRange(input_args.Select(var =>
+            //        var.Declare(new Hole())
+            //    ));
 
-                body.AddRange(input_assembly_statements);
-                body.Add(test.Call(vars.Select(v => v.Ref()).ToList()));
+            //    body.AddRange(input_assembly_statements);
+            //    body.Add(test.Call(vars.Select(v => v.Ref()).ToList()));
 
-                return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main_" + test.Id.Name), Array.Empty<Variable>()), body);
-            }
+            //    return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main_" + test.Id.Name), Array.Empty<Variable>()), body);
+            //}
         }
     }
 }
