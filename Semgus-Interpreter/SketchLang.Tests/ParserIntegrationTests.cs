@@ -3,7 +3,6 @@ using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
-using Sprache;
 using System.Linq;
 
 namespace Semgus.SketchLang.Tests {

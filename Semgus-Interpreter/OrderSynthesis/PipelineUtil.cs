@@ -4,7 +4,6 @@ using Semgus.MiniParser;
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
 using Semgus.OrderSynthesis.Subproblems;
-using Sprache;
 using System.Text.Json;
 
 namespace Semgus.OrderSynthesis {

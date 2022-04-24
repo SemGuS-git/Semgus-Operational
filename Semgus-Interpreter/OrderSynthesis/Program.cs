@@ -4,7 +4,6 @@ using Semgus.CommandLineInterface;
 using Semgus.Operational;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.Subproblems;
-using Sprache;
 using System.Diagnostics;
 using System.Text.Json;
 

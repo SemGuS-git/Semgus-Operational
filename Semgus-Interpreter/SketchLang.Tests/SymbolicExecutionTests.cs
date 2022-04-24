@@ -2,7 +2,6 @@
 using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.SketchSyntax.Sugar;
-using Sprache;
 using Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation;
 using System.Collections.Generic;
 using Semgus.MiniParser;
