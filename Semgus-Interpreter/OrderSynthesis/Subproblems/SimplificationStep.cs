@@ -12,7 +12,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             IReadOnlyList<FunctionDefinition> PrevComparisons
         );
 
-        private record SimplificationClasp(StructType Type, Variable A, Variable B);
+        private record SimplificationClasp(StructType Type, RichTypedVariable A, RichTypedVariable B);
 
         public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<StructType> StructTypeList { get; }
@@ -23,7 +23,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             (StructTypeMap, StructTypeList, PrevComparisons) = config;
 
-            Budgets = StructTypeList.Select(s => new Variable("budget_" + s.Name, IntType.Instance)).ToList();
+            Budgets = StructTypeList.Select(s => new Variable($"budget_{s.Id}", IntType.Id)).ToList();
 
             Debug.Assert(PrevComparisons.All(f => StructTypeMap.TryGetValue(f.Signature.Args[0].TypeId, out var st) && f.Signature.Id != st.CompareId));
         }
@@ -44,15 +44,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 yield return st.GetDisjunctGenerator();
             }
 
-            yield return BitType.GetAtom();
-            yield return IntType.GetAtom();
+            yield return CompareAtomGenerators.GetBitAtom();
+            yield return CompareAtomGenerators.GetIntAtom();
 
             yield return GetMain();
         }
 
 
         public FunctionDefinition GetMain() {
-            var clasps = StructTypeList.Select(s => new SimplificationClasp(s, new Variable(s.Name + "_s0", s), new Variable(s.Name + "_s1", s))).ToList();
+            var clasps = StructTypeList.Select(s => new SimplificationClasp(s, new RichTypedVariable(s.Name + "_s0", s), new RichTypedVariable(s.Name + "_s1", s))).ToList();
 
             List<IStatement> body = new();
 
@@ -71,7 +71,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new MinimizeStatement(Op.Plus.Of(Budgets.Select(b => b.Ref()).ToList())));
 
-            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main"), input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
         }
 
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
@@ -123,7 +123,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             IReadOnlyList<FunctionDefinition> compacted;
             try {
-                compacted = PipelineUtil.ReduceEachToSingleExpression(to_compact,to_reference);
+                compacted = PipelineUtil.ReduceEachToSingleExpression(to_compact, to_reference);
             } catch (Exception) {
                 Console.WriteLine($"--- [Reduction] Failed to transform all comparison functions; halting ---");
                 throw;

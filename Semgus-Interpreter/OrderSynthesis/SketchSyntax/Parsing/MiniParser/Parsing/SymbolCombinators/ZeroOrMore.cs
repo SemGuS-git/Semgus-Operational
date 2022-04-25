@@ -2,15 +2,15 @@
 using Semgus.Util;
 
 namespace Semgus.MiniParser {
-    using ParseResult = Result<IEnumerable<INode>, ParseError>;
-    using ParseOk = OkResult<IEnumerable<INode>, ParseError>;
-    using ParseErr = ErrResult<IEnumerable<INode>, ParseError>;
+    using ParseResult = Result<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseOk = OkResult<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseErr = ErrResult<IEnumerable<ISyntaxNode>, ParseError>;
 
     internal class ZeroOrMore : Symbol, INonTerminalSymbol {
         private class Frame : FrameBase {
             public override Symbol Current => source.Inner;
 
-            private Queue<INode> items = new();
+            private Queue<ISyntaxNode> items = new();
 
             private readonly ZeroOrMore source;
             private bool done = false;
@@ -22,9 +22,9 @@ namespace Semgus.MiniParser {
 
             public override void NotifyFailure() => done = true;
 
-            public override void NotifySuccess(IEnumerable<INode> ok) => items.AddRange(ok);
+            public override void NotifySuccess(IEnumerable<ISyntaxNode> ok) => items.AddRange(ok);
 
-            public override IEnumerable<INode> Bake() => items;// source.Transform is null ? items : new[] { source.Transform(items) };
+            public override IEnumerable<ISyntaxNode> Bake() => items;// source.Transform is null ? items : new[] { source.Transform(items) };
 
             public override bool MoveNext() => !done;
         }
@@ -37,7 +37,7 @@ namespace Semgus.MiniParser {
         public ISynaxMatchingFrame GetFrame() => new Frame(this);
 
         internal override ParseResult ParseRecursive(TapeEnumerator<IToken> tokens) {
-            Queue<INode> okResults = new();
+            Queue<ISyntaxNode> okResults = new();
 
             while (Inner.ParseRecursive(tokens) is ParseOk ok) {
                 okResults.AddRange(ok.Value);

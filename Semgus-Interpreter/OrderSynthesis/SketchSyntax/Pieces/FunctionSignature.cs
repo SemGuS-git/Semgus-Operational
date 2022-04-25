@@ -5,12 +5,19 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         FunctionModifier Flag,
         Identifier ReturnTypeId,
         Identifier Id,
-        IReadOnlyList<IVariableInfo> Args,
-        Identifier? ImplementsId = null
-    ) : INode {
-        public FunctionSignature(FunctionModifier flag, IType returnType, Identifier id, IReadOnlyList<IVariableInfo> args) : this(flag, returnType.Id, id, args) { }
-        public FunctionSignature(Identifier returnTypeId, Identifier id, IReadOnlyList<IVariableInfo> args) : this(FunctionModifier.None, returnTypeId, id, args) { }
-        public FunctionSignature(IType returnType, Identifier id, IReadOnlyList<IVariableInfo> args) : this(FunctionModifier.None, returnType.Id, id, args) { }
+        IReadOnlyList<FunctionArg> Args,
+        Identifier? ImplementsId
+    ) : ISyntaxNode {
+        public FunctionSignature(FunctionModifier flag, Identifier returnTypeId, Identifier id, IReadOnlyList<FunctionArg> args) : this(flag, returnTypeId, id, args, null) { }
+
+        public FunctionSignature(FunctionModifier flag, Identifier returnTypeId, Identifier id, params FunctionArg[] args) : this(flag, returnTypeId, id, args, null) { }
+        public FunctionSignature(Identifier returnTypeId, Identifier id, params FunctionArg[] args) : this(FunctionModifier.None, returnTypeId, id, args) { }
+
+        public FunctionSignature(FunctionModifier flag, Identifier returnTypeId, Identifier id, Variable arg_var0, params Variable[] arg_vars) : this(flag, returnTypeId, id, ToArgs(arg_var0,arg_vars)) { }
+        public FunctionSignature(Identifier returnTypeId, Identifier id, Variable arg_var0, params Variable[] arg_vars) : this(FunctionModifier.None, returnTypeId, id, ToArgs(arg_var0, arg_vars)) { }
+
+
+        static IReadOnlyList<FunctionArg> ToArgs(Variable first, IEnumerable<Variable> rest) => rest.Prepend(first).Select(v => new FunctionArg(v.Id, v.TypeId)).ToList();
 
         public override string ToString() {
             var a = $"{GetPrefix(Flag)}{ReturnTypeId} {Id} ({string.Join(", ", Args.Select(a => $"{a.TypeId} {a.Id}"))})";
@@ -33,38 +40,29 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             Args.SequenceEqual(other.Args);
 
         public FunctionSignature AsFunctional(out Identifier? displacedRefVarId) {
-            if (ReturnTypeId == VoidType.Id) {
-                List<IVariableInfo> new_args = new();
-
-                Identifier return_type_id = VoidType.Id;
-                Identifier? return_var_id = null;
-
-                bool found = false;
-
-
-                foreach (var arg in Args) {
-                    if (arg is RefVariableDeclaration r) {
-                        if (!found) {
-                            return_type_id = arg.TypeId;
-                            return_var_id = arg.Id;
-                            found = true;
-                        } else {
-                            throw new InvalidOperationException();
-                        }
-                    } else {
-                        new_args.Add(arg);
-                    }
+            if (ReturnTypeId != VoidType.Id) {
+                if (Args.Any(a => a.IsRef)) {
+                    throw new InvalidOperationException();
                 }
+                displacedRefVarId = null;
+                return this;
+            }
 
-                if (found) {
-                    displacedRefVarId = return_var_id;
-                    return this with { ReturnTypeId = return_type_id, Args = new_args, ImplementsId = null };
+            List<FunctionArg> pure_inputs = new();
+            FunctionArg? the_ref_arg = null;
+
+            foreach (var arg in Args) {
+                if (arg.IsRef) {
+                    if (the_ref_arg is not null) throw new InvalidOperationException();
+                    the_ref_arg = arg;
                 } else {
-                    displacedRefVarId = null;
-                    return this;
+                    pure_inputs.Add(arg);
                 }
-            } else if (Args.Any(a => a is RefVariableDeclaration)) {
-                throw new InvalidOperationException();
+            }
+
+            if (the_ref_arg is not null) {
+                displacedRefVarId = the_ref_arg.Id;
+                return this with { ReturnTypeId = the_ref_arg.TypeId, Args = pure_inputs, ImplementsId = null };
             } else {
                 displacedRefVarId = null;
                 return this;

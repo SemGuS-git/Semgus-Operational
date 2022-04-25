@@ -12,8 +12,8 @@ namespace Semgus.MiniParser {
 
         record Frame(Symbol symbol, int Cursor) { }
 
-        public bool TryParse(Symbol root, out IEnumerable<INode> result) {
-
+        public bool TryParse(Symbol root, out IEnumerable<ISyntaxNode> result) {
+            throw new NotImplementedException("Non-recursive parser isn't validated right now");
             var stack = new Stack<ISynaxMatchingFrame>();
 
             if (root is INonTerminalSymbol root_nt) {
@@ -23,7 +23,7 @@ namespace Semgus.MiniParser {
                     result = new[] { first };
                     return true;
                 } else {
-                    result = Enumerable.Empty<INode>();
+                    result = Enumerable.Empty<ISyntaxNode>();
                     return false;
                 }
             }
@@ -71,34 +71,9 @@ namespace Semgus.MiniParser {
 
                 break;
             }
-            result = Enumerable.Empty<INode>();
+            result = Enumerable.Empty<ISyntaxNode>();
             return false;
 
         }
-
-        internal bool TryRead(string exact) {
-            if (tokens[tokenCursor].TryGetValue(out var t) && t.Is(exact)) {
-                tokenCursor++;
-                return true;
-            }
-            return false;
-        }
-
-        internal bool TryRead<T>() where T : IToken {
-            if (tokens[tokenCursor].TryGetValue(out var t) && t is T tt) {
-                tokenCursor++;
-                return true;
-            }
-            return false;
-        }
-
-        internal bool TryRead<T>(Func<T, bool> predicate) where T : IToken {
-            if (tokens[tokenCursor].TryGetValue(out var t) && t is T tt && predicate(tt)) {
-                tokenCursor++;
-                return true;
-            }
-            return false;
-        }
-
     }
 }

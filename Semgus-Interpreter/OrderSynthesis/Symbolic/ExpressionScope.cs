@@ -1,14 +1,14 @@
 ﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal class ExpressionScope {
         public IEnumerator<IExpression> RawExpressions { get; }
-        private INode Source { get; }
+        private ISyntaxNode Source { get; }
         private List<IExpression> FlattenedTerms { get; } = new();
 
-        public ExpressionScope(INode source, IEnumerable<IExpression> raw_expressions) {
+        public ExpressionScope(ISyntaxNode source, IEnumerable<IExpression> raw_expressions) {
             RawExpressions = raw_expressions.GetEnumerator();
             Source = source;
         }
-        public ExpressionScope(INode source, params IExpression[] raw_expressions) : this(source, (IEnumerable<IExpression>)raw_expressions) { }
+        public ExpressionScope(ISyntaxNode source, params IExpression[] raw_expressions) : this(source, (IEnumerable<IExpression>)raw_expressions) { }
 
         public void AddExpression(IExpression expression) => FlattenedTerms.Add(expression);
 
@@ -37,7 +37,7 @@
                     frame.ReceiveExpression(FlattenedTerms[0] switch {
                         // e.g. global_variable.x
                         VariableRef variable
-                            => stack.Resolve(new(string.Join('.', variable.TargetId, _prop.Key))),
+                            => stack.Resolve(new($"{variable.TargetId}.{_prop.Key}")),
 
                         // e.g. input_variable.x
                         StructValuePlaceholder placeholder
@@ -47,7 +47,7 @@
 
                         // e.g. (new Pair(5,3)).x
                         StructNew anonymous_struct_value
-                            => anonymous_struct_value.TryGetPropValue(_prop.Key,out var value) ? value : throw new KeyNotFoundException(),
+                            => anonymous_struct_value.TryGetPropValue(_prop.Key, out var value) ? value : throw new KeyNotFoundException(),
 
                         // e.g. (new Pair(1,2) + new Pair(3,5)).x
                         _ => throw new NotSupportedException(),
@@ -63,10 +63,7 @@
                     stack.Pop().OnPop(stack); // Halt execution in this branch
                     break;
                 case VariableDeclaration vd:
-                    frame.Declare(vd.Var.Id, FlattenedTerms[0]);
-                    break;
-                case WeakVariableDeclaration wvd:
-                    frame.Declare(wvd.Id, FlattenedTerms[0]);
+                    frame.Declare(vd.Variable.Id, FlattenedTerms[0]);
                     break;
                 case Assignment asn:
                     if (asn.Subject is not VariableRef flat) throw new ArgumentException("All assignment targets must be flattened during symbolic evaluation");
@@ -78,8 +75,7 @@
         public static ExpressionScope From(IStatement statement) => statement switch {
             IfStatement _if => (new(_if, _if.Condition)),
             ReturnStatement _ret => (new(_ret, _ret.Expr)),
-            VariableDeclaration vd => (new(vd, vd.Def)),
-            WeakVariableDeclaration wvd => (new(wvd, wvd.Def)),
+            VariableDeclaration wvd => (new(wvd, wvd.Def)),
             Assignment asn => (new(asn, asn.Value)),
             FunctionEval _call => (new(_call, _call.Args)),
             FunctionDefinition

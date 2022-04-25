@@ -19,10 +19,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             for (int i = 0; i < n; i++) {
                 var arg = def.Signature.Args[i];
 
-                if (arg is RefVariableDeclaration ref_arg) {
+                if (arg.IsRef) {
                     // We expect all struct prop accesses to be flattened
                     if (arg_raw_expressions[i] is VariableRef settable) {
-                        outer_to_arg_ids.Add(settable, ref_arg.Id);
+                        outer_to_arg_ids.Add(settable, arg.Id);
                     } else {
                         throw new ArgumentException();
                     }

@@ -10,10 +10,10 @@ namespace Semgus.MiniParser {
         object System.Collections.IEnumerator.Current => Current;
 
 
-        public abstract IEnumerable<INode> Bake();
+        public abstract IEnumerable<ISyntaxNode> Bake();
         public abstract void NotifyFailure();
 
-        public abstract void NotifySuccess(IEnumerable<INode> ok);
+        public abstract void NotifySuccess(IEnumerable<ISyntaxNode> ok);
 
         public abstract bool MoveNext();
 

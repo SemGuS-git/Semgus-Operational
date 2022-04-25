@@ -1,4 +1,5 @@
 ﻿using Semgus.MiniParser;
+using Semgus.OrderSynthesis.Subproblems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +30,11 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Helpers {
         public static AssertStatement Assertion(IExpression v) => new(v);
 
         public static UnaryOperation Not(IExpression v) => new(UnaryOp.Not, v);
+
+
+        public static Variable Varn(string s, Identifier typeId) => new(new Identifier(s), typeId);
+        public static Variable Varn(string s, IType type) => new(new Identifier(s), type.Id);
+        public static Variable Varn(string s, string typeId) => new(new Identifier(s), new Identifier(typeId));
     }
 
     internal static class SketchSyntaxExtensions {
@@ -60,15 +66,6 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Helpers {
         public static FunctionEval Call(this Identifier fn_id, params IExpression[] args) => new(fn_id, args);
         public static FunctionEval Call(this Identifier fn_id, IReadOnlyList<IExpression> args) => new(fn_id, args);
 
-        public static FunctionEval Compare(this StructType st, IExpression lhs, IExpression rhs) => new(st.CompareId, lhs, rhs);
-        public static FunctionEval Compare(this StructType st, Variable lhs, Variable rhs) => new(st.CompareId, lhs.Ref(), rhs.Ref());
-        public static UnaryOperation NotCompare(this StructType st, IExpression lhs, IExpression rhs) => new(UnaryOp.Not, new FunctionEval(st.CompareId, lhs, rhs));
-        public static UnaryOperation NotCompare(this StructType st, Variable lhs, Variable rhs) => new(UnaryOp.Not, new FunctionEval(st.CompareId, lhs.Ref(), rhs.Ref()));
-        public static FunctionEval Equal(this StructType st, IExpression lhs, IExpression rhs) => new(st.EqId, lhs, rhs);
-        public static FunctionEval Equal(this StructType st, Variable lhs, Variable rhs) => new(st.EqId, lhs.Ref(), rhs.Ref());
-        public static UnaryOperation NotEqual(this StructType st, IExpression lhs, IExpression rhs) => new(UnaryOp.Not, new FunctionEval(st.EqId, lhs, rhs));
-        public static UnaryOperation NotEqual(this StructType st, Variable lhs, Variable rhs) => new(UnaryOp.Not, new FunctionEval(st.EqId, lhs.Ref(), rhs.Ref()));
-
         public static UnaryOperation Of(this UnaryOp op, IExpression operand) => new(op, operand);
         public static UnaryOperation Of(this UnaryOp op, Variable operand) => new(op, operand.Ref());
 
@@ -87,7 +84,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Helpers {
         public static PropertyAccess Get(this Variable v, Variable el) => new(v.Ref(), el.Id);
         public static PropertyAccess Get(this VariableRef vr, Identifier key) => new(vr, key);
         public static PropertyAccess Get(this PropertyAccess pa, Identifier key) => new(pa, key);
+
         public static VariableRef Ref(this Variable v) => new(v.Id);
+        public static VariableRef Ref(this FunctionArg v) => v.Variable.Ref();
 
         public static StructNew New(this StructType t, IEnumerable<Assignment> args) => new(t.Id, args.ToList());
 

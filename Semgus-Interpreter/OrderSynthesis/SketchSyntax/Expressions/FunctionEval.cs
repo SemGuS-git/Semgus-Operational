@@ -22,13 +22,13 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
 
             List<IStatement> lines = new();
 
-            List<(IVariableInfo out_var, ISettable target)> outVarMap = new();
+            List<(FunctionArg out_var, ISettable target)> outVarMap = new();
 
             foreach((var param,var value) in sig.Args.Zip(Args)) {
-                if(param is RefVariableDeclaration refParam) {
+                if(param.IsRef) {
                     outVarMap.Add((param, (ISettable)value));
                 } else {
-                    lines.Add(new WeakVariableDeclaration(param.TypeId, param.Id, value));
+                    lines.Add(param.Variable.Declare(value));
                 }
             }
 
@@ -45,7 +45,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             }
 
             foreach((var out_var, var target) in outVarMap) {
-                lines.Add(target.Assign(new VariableRef(out_var.Id)));
+                lines.Add(target.Assign(out_var.Variable.Ref()));
             }
 
             statements = lines;

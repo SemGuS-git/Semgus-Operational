@@ -5,12 +5,12 @@ using System.Collections;
 namespace Semgus.MiniParser {
     internal class TokenSet {
         private readonly HashSet<string> keywordSet;
-        private readonly Trie<IToken> specialTokenTrie;
+        private readonly CharTrie<IToken> specialTokenTrie;
 
         public TokenSet(IEnumerable<string> keywords, IEnumerable<string> special, IReadOnlyDictionary<string, string> substitutions) {
             keywordSet = keywords.ToHashSet();
 
-            specialTokenTrie = Trie<IToken>.Build(special.Select(SpecialToken.Of));
+            specialTokenTrie = CharTrie<IToken>.Build(special.Select(SpecialToken.Of));
             foreach (var kvp in substitutions) specialTokenTrie.Insert(kvp.Key, SpecialToken.Of(kvp.Value).Item2);
         }
 
@@ -30,7 +30,7 @@ namespace Semgus.MiniParser {
                 this.text = text;
             }
 
-            public IEnumerator<IToken> GetEnumerator() => new Scanner(tokenSet.keywordSet, tokenSet.specialTokenTrie, text);
+            public IEnumerator<IToken> GetEnumerator() => new Lexer(tokenSet.keywordSet, tokenSet.specialTokenTrie, text);
 
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

@@ -3,7 +3,7 @@ using Semgus.OrderSynthesis.SketchSyntax;
 using Semgus.Util;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal record Clasp(StructType Type, IReadOnlyList<Variable> Indexed, Variable Alternate) {
+    internal record Clasp(StructType Type, IReadOnlyList<RichTypedVariable> Indexed, RichTypedVariable Alternate) {
         public static IReadOnlyList<Clasp> GetAll(IReadOnlyDictionary<Identifier,StructType> types, IEnumerable<FunctionSignature> signatures) {
             Dictionary<Identifier, int> nvar = new();
             List<StructType> participants = new();
@@ -36,8 +36,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
             return participants.Select(p =>
                 new Clasp(
                     p,
-                    Enumerable.Range(0, nvar[p.Id]).Select(i => new Variable($"{p.Name}_s{i}", p)).ToList(),
-                    new Variable($"{p.Name}_alt", p)
+                    Enumerable.Range(0, nvar[p.Id]).Select(i => new RichTypedVariable($"{p.Name}_s{i}", p)).ToList(),
+                    new RichTypedVariable($"{p.Name}_alt", p)
                  )
             ).ToList();
         }

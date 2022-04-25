@@ -12,12 +12,12 @@ namespace Semgus.MiniParser {
 
         internal void Install(Symbol inner) => Inner = inner;
 
-        public override bool CheckTerminal(IToken token, out INode node) => Inner.CheckTerminal(token, out node);
+        public override bool CheckTerminal(IToken token, out ISyntaxNode node) => Inner.CheckTerminal(token, out node);
 
         public ISynaxMatchingFrame GetFrame() => ((INonTerminalSymbol)Inner).GetFrame();
 
         public override string ToString() => Inner?.ToString()??"<placeholder>";
 
-        internal override Result<IEnumerable<INode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens) => Inner!.ParseRecursive(tokens);
+        internal override Result<IEnumerable<ISyntaxNode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens) => Inner!.ParseRecursive(tokens);
     }
 }

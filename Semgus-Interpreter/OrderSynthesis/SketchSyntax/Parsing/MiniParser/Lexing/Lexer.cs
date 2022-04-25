@@ -4,7 +4,7 @@ using Semgus.Util;
 using System.Collections;
 
 namespace Semgus.MiniParser {
-    internal class Scanner : IEnumerator<IToken> {
+    internal class Lexer : IEnumerator<IToken> {
         private IToken? current = null;
         public IToken Current => current ?? throw new InvalidOperationException();
 
@@ -17,8 +17,8 @@ namespace Semgus.MiniParser {
 
 
         private readonly HashSet<string> keywords;
-        private readonly Trie<IToken> trieRoot;
-        public Scanner(HashSet<string> keywords, Trie<IToken> trie, string src) {
+        private readonly CharTrie<IToken> trieRoot;
+        public Lexer(HashSet<string> keywords, CharTrie<IToken> trie, string src) {
             this.keywords = keywords;
             this.trieRoot = trie;
             this.src = src;

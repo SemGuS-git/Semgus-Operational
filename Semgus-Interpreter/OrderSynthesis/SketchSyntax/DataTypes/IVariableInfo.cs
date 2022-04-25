@@ -1,8 +1,8 @@
-﻿using Semgus.MiniParser;
+﻿//using Semgus.MiniParser;
 
-namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal interface IVariableInfo {
-        Identifier TypeId { get; }
-        Identifier Id { get; }
-    }
-}
+//namespace Semgus.OrderSynthesis.SketchSyntax {
+//    internal interface IVariableInfo {
+//        Identifier TypeId { get; }
+//        Identifier Id { get; }
+//    }
+//}

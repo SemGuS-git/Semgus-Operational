@@ -5,7 +5,7 @@ namespace Semgus.MiniParser {
         private class Frame : FrameBase {
             public override Symbol Current => source.Inner;
 
-            private Queue<INode> items = new();
+            private Queue<ISyntaxNode> items = new();
 
             private readonly NtTransformedSymbol source;
             private bool done = false;
@@ -16,12 +16,12 @@ namespace Semgus.MiniParser {
 
             public override void NotifyFailure() { }
 
-            public override void NotifySuccess(IEnumerable<INode> ok) {
+            public override void NotifySuccess(IEnumerable<ISyntaxNode> ok) {
                 items.AddRange(ok);
                 IsSuccess = true;
             }
 
-            public override IEnumerable<INode> Bake() => Just(source.Function(items));
+            public override IEnumerable<ISyntaxNode> Bake() => Just(source.Function(items));
 
             public override bool MoveNext() => !done && (done = true);
         }
@@ -33,7 +33,7 @@ namespace Semgus.MiniParser {
             _inner = inner;
         }
 
-        public override bool CheckTerminal(IToken token, out INode node) => throw new NotSupportedException();
+        public override bool CheckTerminal(IToken token, out ISyntaxNode node) => throw new NotSupportedException();
 
         public ISynaxMatchingFrame GetFrame() => new Frame(this);
     }

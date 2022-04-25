@@ -2,13 +2,13 @@
 using Semgus.Util;
 
 namespace Semgus.MiniParser {
-    using ParseResult = Result<IEnumerable<INode>, ParseError>;
-    using ParseOk = OkResult<IEnumerable<INode>, ParseError>;
-    using ParseErr = ErrResult<IEnumerable<INode>, ParseError>;
+    using ParseResult = Result<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseOk = OkResult<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseErr = ErrResult<IEnumerable<ISyntaxNode>, ParseError>;
 
-    using ParseManyResult = Result<IEnumerable<INode>, IEnumerable<ParseError>>;
-    using ParseManyOk = OkResult<IEnumerable<INode>, IEnumerable<ParseError>>;
-    using ParseManyErr = ErrResult<IEnumerable<INode>, IEnumerable<ParseError>>;
+    using ParseManyResult = Result<IEnumerable<ISyntaxNode>, IEnumerable<ParseError>>;
+    using ParseManyOk = OkResult<IEnumerable<ISyntaxNode>, IEnumerable<ParseError>>;
+    using ParseManyErr = ErrResult<IEnumerable<ISyntaxNode>, IEnumerable<ParseError>>;
 
     internal class Earliest : Symbol, INonTerminalSymbol {
 
@@ -20,20 +20,20 @@ namespace Semgus.MiniParser {
 
             private bool stop = false;
 
-            private Queue<INode> results = new();
+            private Queue<ISyntaxNode> results = new();
 
             public Frame(Earliest source) {
                 this.source = source;
                 this.enumerator = source.list.GetEnumerator();
             }
 
-            public override IEnumerable<INode> Bake() => results;// source.Transform is null ? results : new[] { source.Transform(results) };
+            public override IEnumerable<ISyntaxNode> Bake() => results;// source.Transform is null ? results : new[] { source.Transform(results) };
 
             public override bool MoveNext() => !stop && enumerator.MoveNext();
 
             public override void NotifyFailure() { }
 
-            public override void NotifySuccess(IEnumerable<INode> ok) {
+            public override void NotifySuccess(IEnumerable<ISyntaxNode> ok) {
                 IsSuccess = true;
                 results.AddRange(ok);
                 stop = true;

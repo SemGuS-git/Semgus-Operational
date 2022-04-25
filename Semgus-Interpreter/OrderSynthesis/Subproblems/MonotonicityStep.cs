@@ -35,12 +35,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             foreach (var prod in grammar.Productions.Values.SelectMany(val => val.Select(mu => mu.Production)).Distinct()) {
                 if (prod.Semantics.Count != 1) throw new NotImplementedException();
-                converter.RegisterProd(prod);
+                converter.EncompassStructTypes(prod);
                 all_sem.Add(prod.Semantics[0]);
             }
 
             foreach (var sem in all_sem) {
-                var (fn, fn_return_type) = converter.OpSemToFunction(new($"lang_f{functions.Count + non_mono.Count}"), sem.ProductionRule, sem.Steps);
+                var fn = converter.OpSemToFunction(new($"lang_f{functions.Count + non_mono.Count}"), sem.ProductionRule, sem.Steps);
                 fn.Alias = sem.ProductionRule.ToString();
 
                 var sig = fn.Signature;
@@ -53,9 +53,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 functions.Add(fn);
 
-                observed_struct_types.TryAdd(sig.ReturnTypeId, fn_return_type);
+                observed_struct_types.TryAdd(sig.ReturnTypeId, converter.GetStructType(sig.ReturnTypeId));
                 foreach (var arg in sig.Args) {
-                    observed_struct_types.TryAdd(arg.TypeId, (StructType)((Variable)arg).Type);
+                    observed_struct_types.TryAdd(arg.TypeId, converter.GetStructType(arg.TypeId));
                 }
             }
 
@@ -72,8 +72,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 yield return st.GetDisjunctGenerator();
             }
 
-            yield return BitType.GetAtom();
-            yield return IntType.GetAtom();
+            yield return CompareAtomGenerators.GetBitAtom();
+            yield return CompareAtomGenerators.GetIntAtom();
 
             foreach (var fn in MaybeMonotoneFunctions) {
                 yield return fn;
@@ -97,13 +97,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new Annotation("Check partial equality properties", 2));
             foreach (var c in clasps) {
-                body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0], c.Indexed[1], c.Indexed[2]));
+                body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0].Sig(), c.Indexed[1].Sig(), c.Indexed[2].Sig()));
             }
 
             body.Add(new Annotation("Monotonicity", 2));
 
-            var n_mono = new Variable("n_mono", IntType.Instance);
-            body.Add(new VariableDeclaration(n_mono, new Literal(0)));
+            var n_mono = new Variable("n_mono", IntType.Id);
+            body.Add(new VariableDeclaration(n_mono, Lit0));
 
             var claspMap = clasps.ToDictionary(v => v.Type.Id);
             foreach (var fn in MaybeMonotoneFunctions) {
@@ -114,7 +114,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new MinimizeStatement(Op.Minus.Of(new Literal(n_mono_checks), n_mono.Ref())));
 
-            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main"), input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
         }
 
         private IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<Identifier, Clasp> clasps, FunctionDefinition fn) {
@@ -142,7 +142,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 List<VariableRef> alt_args = new(fixed_args);
                 alt_args[i] = alt_i.Ref();
 
-                var mono_flag = new Variable($"mono_{fn.Id}_{i}", IntType.Instance);
+                var mono_flag = new Variable($"mono_{fn.Id}_{i}", IntType.Id);
 
                 yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Id}_{i}"));
                 yield return mono_flag.IfEq(Lit0,
@@ -162,22 +162,22 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
         }
 
-        public static (IReadOnlyList<Variable> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<Variable> input_structs) {
-            List<Variable> input_args = new();
+        public static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<RichTypedVariable> input_structs) {
+            List<FunctionArg> input_args = new();
             List<IStatement> input_assembly_statements = new();
 
             input_assembly_statements.Add(new Annotation("Assemble structs"));
 
             foreach (var obj in input_structs) {
                 if (obj.Type is not StructType st) throw new NotSupportedException();
-                List<Variable> locals = new();
+                List<FunctionArg> locals = new();
                 foreach (var prop in st.Elements) {
-                    if (prop.Type is StructType) throw new NotSupportedException();
-                    locals.Add(new Variable($"{obj.Id}_{prop.Id}", prop.Type));
+                    //if (prop.Type is StructType) throw new NotSupportedException();
+                    locals.Add(new FunctionArg(new($"{obj.Id}_{prop.Id}"), prop.TypeId));
                 }
 
                 input_args.AddRange(locals);
-                input_assembly_statements.Add(new VariableDeclaration(obj, st.New(st.Elements.Select((prop, i) => prop.Assign(locals[i].Ref())))));
+                input_assembly_statements.Add(new VariableDeclaration(obj.Sig(), st.New(st.Elements.Select((prop, i) => prop.Assign(locals[i].Ref())))));
             }
 
             return (input_args, input_assembly_statements);

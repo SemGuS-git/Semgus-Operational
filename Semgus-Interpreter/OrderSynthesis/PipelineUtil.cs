@@ -76,7 +76,7 @@ namespace Semgus.OrderSynthesis {
 
             var adjusted = function.Body.Select(stmt => stmt is ReturnStatement ? new ReturnStatement(new VariableRef(refVarId)) : stmt);
 
-            adjusted = adjusted.Prepend(new WeakVariableDeclaration(sig_functional.ReturnTypeId, refVarId));
+            adjusted = adjusted.Prepend(new VariableDeclaration(new(refVarId, sig_functional.ReturnTypeId)));
 
 
             return new FunctionDefinition(sig_functional, adjusted.ToList());

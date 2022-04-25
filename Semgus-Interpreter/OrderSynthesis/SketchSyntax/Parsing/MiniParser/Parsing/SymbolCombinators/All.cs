@@ -2,13 +2,13 @@
 using Semgus.Util;
 
 namespace Semgus.MiniParser {
-    using ParseResult = Result<IEnumerable<INode>, ParseError>;
-    using ParseOk = OkResult<IEnumerable<INode>, ParseError>;
-    using ParseErr = ErrResult<IEnumerable<INode>, ParseError>;
+    using ParseResult = Result<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseOk = OkResult<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseErr = ErrResult<IEnumerable<ISyntaxNode>, ParseError>;
 
-    using ParseManyResult = Result<IEnumerable<INode>, ParseError>;
-    using ParseManyOk = OkResult<IEnumerable<INode>, ParseError>;
-    using ParseManyErr = ErrResult<IEnumerable<INode>, ParseError>;
+    using ParseManyResult = Result<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseManyOk = OkResult<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseManyErr = ErrResult<IEnumerable<ISyntaxNode>, ParseError>;
 
     internal class All : Symbol, INonTerminalSymbol {
 
@@ -21,14 +21,14 @@ namespace Semgus.MiniParser {
             private bool stop = false;
             private bool anyFailed = false;
 
-            private Queue<INode> results = new();
+            private Queue<ISyntaxNode> results = new();
 
             public Frame(All source) {
                 this.source = source;
                 this.enumerator = source.list.GetEnumerator();
             }
 
-            public override IEnumerable<INode> Bake() => results;//: new[] { source.Transform(results) };
+            public override IEnumerable<ISyntaxNode> Bake() => results;//: new[] { source.Transform(results) };
 
             public override bool MoveNext() {
                 if (stop) return false;
@@ -43,7 +43,7 @@ namespace Semgus.MiniParser {
                 IsSuccess = false;
             }
 
-            public override void NotifySuccess(IEnumerable<INode> ok) {
+            public override void NotifySuccess(IEnumerable<ISyntaxNode> ok) {
                 results.AddRange(ok);
             }
         }

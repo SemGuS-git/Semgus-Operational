@@ -1,3 +1,3 @@
 ﻿namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal interface INode { }
+    internal interface ISyntaxNode { }
 }

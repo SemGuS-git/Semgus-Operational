@@ -7,8 +7,8 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
 
         public void Push(IScope scope) => _stack.Push(scope);
 
-        public bool TryPeek(out IScope scope) => _stack.TryPeek(out scope);
-        public bool TryPop(out IScope scope) => _stack.TryPop(out scope);
+        public bool TryPeek(out IScope scope) => _stack.TryPeek(out scope!);
+        public bool TryPop(out IScope scope) => _stack.TryPop(out scope!);
         public IScope Pop() => _stack.Pop();
         public IScope Peek() => _stack.Peek();
 
@@ -16,7 +16,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             this._functionMap = functionMap;
         }
 
-        internal bool TryGetFunction(Identifier id, out FunctionDefinition function) => _functionMap.TryGetValue(id, out function);
+        internal bool TryGetFunction(Identifier id, out FunctionDefinition function) => _functionMap.TryGetValue(id, out function!);
 
         internal IExpression Resolve(Identifier id) {
             foreach(var frame in _stack) {

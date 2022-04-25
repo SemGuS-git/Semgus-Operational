@@ -1,11 +1,10 @@
 ﻿using Semgus.MiniParser;
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal record Variable (Identifier Id, IType Type)  : IVariableInfo  {
-        public Identifier TypeId => Type.Id;
+    internal record Variable(Identifier Id, Identifier TypeId) : ISyntaxNode {
+        public Variable(string name, Identifier typeId) : this(new Identifier(name), typeId) { }
+        public Variable(string name, IType type) : this(new Identifier(name), type.Id) { }
 
-        public Variable(string name, IType type) : this(new Identifier(name), type) { }
-
-        public override string ToString() => Id.ToString();
+        public override string ToString() => $"{TypeId} {Id}";
     }
 }

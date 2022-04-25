@@ -1,11 +1,11 @@
 ﻿using Semgus.MiniParser;
 
 namespace Semgus.OrderSynthesis.SketchSyntax {
-    internal record StructDefinition  (Identifier Id, IReadOnlyList<IVariableInfo> Props)  : IStatement  {
+    internal record StructDefinition  (Identifier Id, IReadOnlyList<Variable> Props)  : IStatement  {
 
         public string? Comment { get; set; }
 
-        public StructDefinition(Identifier id, params IVariableInfo[] props) : this(id, props.ToList()) { }
+        public StructDefinition(Identifier id, params Variable[] props) : this(id, props.ToList()) { }
 
         public void WriteInto(ILineReceiver lineReceiver) {
             if (Comment is not null) lineReceiver.Add($"// {Comment}");

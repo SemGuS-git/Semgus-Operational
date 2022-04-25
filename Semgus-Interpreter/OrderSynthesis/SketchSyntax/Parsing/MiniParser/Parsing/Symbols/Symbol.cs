@@ -15,7 +15,7 @@ namespace Semgus.MiniParser {
             _ => new KeywordSymbol(s),
         };
 
-        public virtual bool CheckTerminal(IToken token, out INode node) => throw new NotSupportedException();
-        internal abstract Result<IEnumerable<INode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens);
+        public virtual bool CheckTerminal(IToken token, out ISyntaxNode node) => throw new NotSupportedException();
+        internal abstract Result<IEnumerable<ISyntaxNode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens);
     }
 }

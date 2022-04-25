@@ -255,16 +255,16 @@ namespace Semgus.SketchLang.Tests {
 
 
         /***** WeakVariableDeclaration ******/
-        static IEnumerable<object[]> WeakVariableDeclarationCases => new[] {
-            new object[] { "int x", new WeakVariableDeclaration(new("int"),new("x")) },
-            new object[] { "int x = 2", new WeakVariableDeclaration(new("int"),new("x"),new Literal(2)) },
-            new object[] { "int/*test*/x/*test*/=/*test*/2", new WeakVariableDeclaration(new("int"),new("x"),new Literal(2)) },
-            new object[] { "int//a\nx//a\n=//a\n2", new WeakVariableDeclaration(new("int"),new("x"),new Literal(2)) }
+        static IEnumerable<object[]> VariableDeclarationCases => new[] {
+            new object[] { "int x", Varn("x","int").Declare() },
+            new object[] { "int x = 2", Varn("x","int").Declare(Lit2) },
+            new object[] { "int/*test*/x/*test*/=/*test*/2", Varn("x","int").Declare(Lit2) },
+            new object[] { "int//a\nx//a\n=//a\n2", Varn("x","int").Declare(Lit2) }
         };
 
         [DataTestMethod]
-        [DynamicData(nameof(WeakVariableDeclarationCases))]
-        public void TestParseWeakVariableDeclaration(string str, object value) {
+        [DynamicData(nameof(VariableDeclarationCases))]
+        public void TestParseVariableDeclaration(string str, object value) {
             Assert.AreEqual(value, SketchParser.WeakVariableDeclaration.Parse(str));
         }
 
@@ -274,7 +274,7 @@ namespace Semgus.SketchLang.Tests {
         [DataRow("int x.y")]
         [DataRow("int = 5")]
         //[DataRow("int x + 1")]
-        public void TestParseWeakVariableDeclarationFails(string str) {
+        public void TestParsVariableDeclarationFails(string str) {
             try {
                 AssertEmpty(SketchParser.Statement.ParseMany(str));
             } catch (ParseError) { } catch (InvalidTokenException) { }
@@ -283,10 +283,13 @@ namespace Semgus.SketchLang.Tests {
 
         /***** FunctionArg ******/
         static IEnumerable<object[]> FunctionArgCases => new[] {
-            new object[] { "int x", new WeakVariableDeclaration(new("int"),new("x")) },
-            new object[] { "ref int x", new RefVariableDeclaration(new WeakVariableDeclaration(new("int"), new("x"))) },
-            new object[] { "ref/*a*/ //b\nint/*a*/ //b\nx", new RefVariableDeclaration(new WeakVariableDeclaration(new("int"), new("x"))) }
+            new object[] { "int x", Arg("int", "x") },
+            new object[] { "ref int x", RefArg("int", "x") },
+            new object[] { "ref/*a*/ //b\nint/*a*/ //b\nx", RefArg("int", "x") }
         };
+
+        private static FunctionArg RefArg(string typeId, string id) => new(new(id, new Identifier(typeId)), true);
+        private static FunctionArg Arg(string typeId, string id) => new(new(id, new Identifier(typeId)));
 
         [DataTestMethod]
         [DynamicData(nameof(FunctionArgCases))]
@@ -316,8 +319,8 @@ namespace Semgus.SketchLang.Tests {
             new object[] { "(\n)", new object[] { } },
             new object[] { "( // none\n)", new object[] { } },
             new object[] { "(int x,\n ref int y)", new object[] {
-                VDec("int", "x"),
-                new RefVariableDeclaration(VDec("int", "y"))
+                Arg("int", "x"),
+                RefArg("int", "y")
             } },
         };
 
@@ -346,27 +349,26 @@ namespace Semgus.SketchLang.Tests {
 
 
         /***** WeakFunctionSignature ******/
-        static IEnumerable<object[]> WeakFunctionSignatureCases => new[] {
+        static IEnumerable<object[]> FunctionSignatureCases => new[] {
             new object[] { " int mul (int x, int y, ref bit flag)", new FunctionSignature(
-                FunctionModifier.None, IntType.Id, new("mul"), new IVariableInfo[] {
-                    VDec("int", "x"),
-                    VDec("int", "y"),
-                    new RefVariableDeclaration(VDec("bit", "flag"))
+                FunctionModifier.None, IntType.Id, new("mul"), new FunctionArg[] {
+                    Arg("int", "x"),
+                    Arg("int", "y"),
+                    RefArg("bit", "flag")
                 })
             },
             new object[] { " generator bit t(\n)", new FunctionSignature(
-                FunctionModifier.Generator, BitType.Id, new("t"), Array.Empty<IVariableInfo>() )
+                FunctionModifier.Generator, BitType.Id, new("t"))
             },
             new object[] { " generator bit t(\n) implements __mu_iota", new FunctionSignature(
-                FunctionModifier.Generator, BitType.Id, new("t"), Array.Empty<IVariableInfo>()
-                ){ImplementsId=new("__mu_iota")}
+                FunctionModifier.Generator, BitType.Id, new("t")){ImplementsId=new("__mu_iota")}
             },
         };
 
         [DataTestMethod]
-        [DynamicData(nameof(WeakFunctionSignatureCases))]
-        public void TestParseWeakFunctionSignature(string str, object value) {
-            var res = SketchParser.WeakFunctionSignature.Parse(str);
+        [DynamicData(nameof(FunctionSignatureCases))]
+        public void TestParseFunctionSignature(string str, object value) {
+            var res = SketchParser.FunctionSignature.Parse(str);
             Assert.AreEqual(value, res);
         }
 
@@ -374,9 +376,9 @@ namespace Semgus.SketchLang.Tests {
         [DataRow("generator mul()")]
         [DataRow("other valuable mul()")]
         [DataRow("non sequitur")]
-        public void TestParseWeakFunctionSignatureFails(string str) {
+        public void TestParseFunctionSignatureFails(string str) {
             try {
-                AssertEmpty(SketchParser.WeakFunctionSignature.ParseMany(str));
+                AssertEmpty(SketchParser.FunctionSignature.ParseMany(str));
             } catch (ParseError) { } catch (InvalidTokenException) { }
         }
 
@@ -543,7 +545,7 @@ namespace Semgus.SketchLang.Tests {
 struct Out_0 {
     int v0;
 }"
-            , new StructDefinition(new("Out_0"), VDec("int","v0"))
+            , new StructDefinition(new("Out_0"), new Variable("v0", IntType.Id))
             }
         };
 
@@ -765,7 +767,7 @@ bit compare_Out_0 (Out_0 a, Out_0 b) //ok
                         FunctionModifier.None,
                         BitType.Id,
                         new("compare_Out_0"),
-                        new[]{VDec("Out_0","a"),VDec("Out_0","b") }
+                        Arg("Out_0","a"),Arg("Out_0","b")
                     ),
                     VDec("bit","leq",Lit(0)),
                     new RepeatStatement(new Hole(),
@@ -784,8 +786,7 @@ harness void main() /*test*/ { assert(0); return; } //ok
                     new FunctionSignature(
                         FunctionModifier.Harness,
                         VoidType.Id,
-                        new("main"),
-                        Array.Empty<IVariableInfo>()
+                        new("main")
                     ),
                     new AssertStatement(Lit(0)),
                     new ReturnStatement()
@@ -805,13 +806,13 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
                         FunctionModifier.Harness,
                         VoidType.Id,
                         new("main"),
-                        new[]{VDec("int","Out_0_s0_v0"), VDec("int", "Out_0_s0_v1") }
+                        Arg("int","Out_0_s0_v0"), Arg("int", "Out_0_s0_v1") 
                     ),
                     VDec("Out_0","Out_0_s0",new StructNew(new("Out_0"),new[]{Var("v0").Assign(Var("Out_0_s0_v0")) })),
                     new ReturnStatement()
                 ),
             },
-            new object[]{@"void main() /*aa*/ { }" , new FunctionDefinition(new FunctionSignature(FunctionModifier.None,VoidType.Id,new("main"),Array.Empty<IVariableInfo>())) }
+            new object[]{@"void main() /*aa*/ { }" , new FunctionDefinition(new FunctionSignature(VoidType.Id,new("main"))) }
         };
 
         [DataTestMethod]
@@ -868,8 +869,8 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
 
 
 
-        static WeakVariableDeclaration VDec(string t, string n) => new(new(t), new(n));
-        static WeakVariableDeclaration VDec(string t, string n, IExpression def) => new(new(t), new(n), def);
+        static VariableDeclaration VDec(string t, string n) => new(new(n, new Identifier(t)));
+        static VariableDeclaration VDec(string t, string n, IExpression def) => new(new(n, new Identifier(t)), def);
 
         static Literal Lit(int i) => new(i);
 

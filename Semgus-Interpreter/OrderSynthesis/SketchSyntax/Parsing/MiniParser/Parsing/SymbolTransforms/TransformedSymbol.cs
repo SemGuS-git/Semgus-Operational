@@ -12,14 +12,14 @@ namespace Semgus.MiniParser {
 
         public Transformer Function { get; }
 
-        public delegate INode Transformer(Queue<INode> context);
+        public delegate ISyntaxNode Transformer(Queue<ISyntaxNode> context);
 
         public TransformedSymbol(Symbol inner, Transformer function) {
             Inner = inner;
             Function = function;
         }
 
-        public override bool CheckTerminal(IToken token, out INode node) {
+        public override bool CheckTerminal(IToken token, out ISyntaxNode node) {
             if (!Inner.CheckTerminal(token, out node)) return false;
             node = Function(new(Just(node)));
             return true;
@@ -27,13 +27,13 @@ namespace Semgus.MiniParser {
 
         public override string ToString() => "TR";// Inner.ToString();
 
-        internal override Result<IEnumerable<INode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens) {
+        internal override Result<IEnumerable<ISyntaxNode>, ParseError> ParseRecursive(TapeEnumerator<IToken> tokens) {
             var innerResult = Inner.ParseRecursive(tokens);
-            if (innerResult is ErrResult<IEnumerable<INode>, ParseError> err) return innerResult;
+            if (innerResult is ErrResult<IEnumerable<ISyntaxNode>, ParseError> err) return innerResult;
             var nodes = innerResult.Unwrap();
             try {
                 var transformed = Function(new(nodes));
-                return Result.Ok<IEnumerable<INode>, ParseError>(Just(transformed));
+                return Result.Ok<IEnumerable<ISyntaxNode>, ParseError>(Just(transformed));
             } catch (Exception e) {
                 throw new AggregateException($"Error constructing symbol {Name??"(...)"} ::= {Inner} from [{string.Join(", ",nodes)}]", e);
             }

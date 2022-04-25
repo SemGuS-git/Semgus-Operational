@@ -15,7 +15,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             private FunctionDefinition SynthGenerator { get; }
 
             static FunctionDefinition AtomBit { get; }
-                = new(new FunctionSignature(FunctionModifier.Generator, BitType.Instance, new Identifier("fixed_atom_bit"), Array.Empty<Variable>()),
+                = new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, new Identifier("fixed_atom_bit")),
                     Return(new Hole())
                 );
 
@@ -23,7 +23,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 = new Func<FunctionDefinition>(() => {
                     var v_t = new Variable("t", IntType.Instance);
 
-                    return new(new FunctionSignature(FunctionModifier.Generator, IntType.Instance, new Identifier("fixed_atom_int"), Array.Empty<Variable>()),
+                    return new(new FunctionSignature(FunctionModifier.Generator, IntType.Id, new Identifier("fixed_atom_int")),
                         v_t.Declare(new Hole()),
                         v_t.IfEq(Lit0, Return(Shared.IntMin)),
                         v_t.IfEq(Lit1, Return(Shared.IntMax)),
@@ -31,11 +31,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     );
                 }).Invoke();
 
-            static FunctionDefinition GetAtom(IType type) => type switch {
-                BitType => AtomBit,
-                IntType => AtomInt,
-                _ => throw new NotSupportedException(),
-            };
+            static FunctionDefinition GetAtom(Identifier typeId)
+                => typeId == BitType.Id ? AtomBit : typeId == IntType.Id ? AtomInt : throw new NotSupportedException();
 
 
             public TopOrBot(bool isTopElseBot, StructType subject, FunctionDefinition compare) {
@@ -45,9 +42,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 this.Subject = subject;
                 this.Compare = compare;
 
-                SynthGenerator = new FunctionDefinition(new FunctionSignature(subject, SynthFunId, Array.Empty<Variable>()),
+                SynthGenerator = new FunctionDefinition(new FunctionSignature(subject.Id, SynthFunId),
                     Return(
-                        new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.Type).Call())).ToList())
+                        new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.TypeId).Call())).ToList())
                     )
                 );
             }
@@ -60,11 +57,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     : Compare.Call(SynthGenerator.Call(), a.Ref()); // BOT <= variable
 
 
-                var assert_bound_holds = new FunctionDefinition(new FunctionSignature(VoidType.Instance, new($"test_{Which}"), new[] { a }),
+                var assert_bound_holds = new FunctionDefinition(new FunctionSignature(VoidType.Id, new($"test_{Which}"), a),
                     Assertion(check_bound)
                 );
 
-                var bound_holds_forall = Shared.GetForallTestHarness(assert_bound_holds, a);
+                var bound_holds_forall = Shared.GetForallTestHarness(Subject, assert_bound_holds, a);
 
                 yield return Subject.GetStructDef();
                 yield return Compare;
@@ -99,7 +96,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         Not(Compare.Call(next_val, prev_val))
                     );
 
-                return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Instance, new($"improve_{Which}"), Array.Empty<IVariableInfo>()),
+                return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"improve_{Which}")),
                     prev_val.Declare(prev_def.Call()),
                     next_val.Declare(SynthGenerator.Call()),
                     Assertion(is_tighter_bound)

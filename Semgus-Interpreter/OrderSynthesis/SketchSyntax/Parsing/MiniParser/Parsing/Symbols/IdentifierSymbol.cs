@@ -2,14 +2,14 @@
 using Semgus.Util;
 
 namespace Semgus.MiniParser {
-    using ParseResult = Result<IEnumerable<INode>, ParseError>;
-    using ParseOk = OkResult<IEnumerable<INode>, ParseError>;
-    using ParseErr = ErrResult<IEnumerable<INode>, ParseError>;
+    using ParseResult = Result<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseOk = OkResult<IEnumerable<ISyntaxNode>, ParseError>;
+    using ParseErr = ErrResult<IEnumerable<ISyntaxNode>, ParseError>;
 
     internal class IdentifierSymbol : Symbol {
         public override string ToString() => Name ?? "ID";
 
-        public override bool CheckTerminal(IToken token, out INode node) {
+        public override bool CheckTerminal(IToken token, out ISyntaxNode node) {
             if (token is Identifier id) {
                 node = id;
                 return true;
@@ -21,7 +21,7 @@ namespace Semgus.MiniParser {
         internal override ParseResult ParseRecursive(TapeEnumerator<IToken> tokens) {
             if (tokens.Peek().TryGetValue(out var token) && token is Identifier id) {
                 tokens.MoveNext();
-                return new ParseOk(new INode[] { id });
+                return new ParseOk(new ISyntaxNode[] { id });
             } else {
                 return new ParseErr(new(tokens, this, tokens.Cursor, 1));
             }

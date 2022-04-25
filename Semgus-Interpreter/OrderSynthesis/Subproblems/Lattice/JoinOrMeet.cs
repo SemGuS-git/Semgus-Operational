@@ -9,12 +9,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
         internal class JoinOrMeet : ILatticeSubstep {
             static FunctionDefinition AtomBit { get; }
                 = new Func<FunctionDefinition>(() => {
-                    var t = new Variable("t", IntType.Instance);
-                    var a = new Variable("a", BitType.Instance);
-                    var b = new Variable("b", BitType.Instance);
+                    var t = Varn("t", IntType.Instance);
+                    var a = Varn("a", BitType.Instance);
+                    var b = Varn("b", BitType.Instance);
                     var a_ref = a.Ref();
                     var b_ref = b.Ref();
-                    return new(new FunctionSignature(FunctionModifier.Generator, BitType.Instance, new Identifier("overlap_atom_bit"), new[] { a, b }),
+                    return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, new Identifier("overlap_atom_bit"), a, b),
                         t.Declare(new Hole()),
                         t.IfEq(Lit0, Return(Op.And.Of(a_ref, b_ref))),
                         t.IfEq(Lit1, Return(Op.Or.Of(a_ref, b_ref))),
@@ -28,12 +28,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             static FunctionDefinition AtomInt { get; }
                 = new Func<FunctionDefinition>(() => {
-                    var t = new Variable("t", IntType.Instance);
-                    var a = new Variable("a", IntType.Instance);
-                    var b = new Variable("b", IntType.Instance);
+                    var t = Varn("t", IntType.Instance);
+                    var a = Varn("a", IntType.Instance);
+                    var b = Varn("b", IntType.Instance);
                     var a_ref = a.Ref();
                     var b_ref = b.Ref();
-                    return new(new FunctionSignature(FunctionModifier.Generator, IntType.Instance, new Identifier("overlap_atom_int"), new[] { a, b }),
+                    return new(new FunctionSignature(FunctionModifier.Generator, IntType.Id, new Identifier("overlap_atom_int"), a, b),
                         t.Declare(new Hole()),
                         t.IfEq(Lit0, Return(new Ternary(Op.Lt.Of(a_ref, b_ref), a_ref, b_ref))),
                         t.IfEq(Lit1, Return(new Ternary(Op.Gt.Of(a_ref, b_ref), a_ref, b_ref))),
@@ -44,11 +44,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 }).Invoke();
 
 
-            static FunctionDefinition GetAtom(IType type) => type switch {
-                BitType => AtomBit,
-                IntType => AtomInt,
-                _ => throw new NotSupportedException(),
-            };
+            static FunctionDefinition GetAtom(Identifier typeId)
+                => typeId == BitType.Id ? AtomBit : typeId == IntType.Id ? AtomInt : throw new NotSupportedException();
 
 
 
@@ -56,7 +53,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             private string Which { get; }
             public Identifier SynthFunId => SynthesisTarget.Id;
             public StructType Subject { get; }
-            
+
             public FunctionDefinition Eq { get; }
             public FunctionDefinition Compare { get; }
 
@@ -72,21 +69,21 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             }
             static FunctionDefinition MakeSynthesisTarget(Identifier id, StructType subject) {
-                var a = new Variable("a", subject);
-                var b = new Variable("b", subject);
-                return new FunctionDefinition(new FunctionSignature(subject,id, new[] { a, b }),
+                var a = Varn("a", subject);
+                var b = Varn("b", subject);
+                return new FunctionDefinition(new FunctionSignature(subject.Id, id, a, b),
                     Return(
-                        new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.Type).Call(a.Get(e), b.Get(e)))).ToList())
+                        new StructNew(subject.Id, subject.Elements.Select(e => new VariableRef(e.Id).Assign(GetAtom(e.TypeId).Call(a.Get(e), b.Get(e)))).ToList())
                     )
                 );
             }
 
             public IEnumerable<IStatement> GetInitialFile() {
 
-                var a = new Variable("a", Subject);
-                var b = new Variable("b", Subject);
+                var a = Varn("a", Subject);
+                var b = Varn("b", Subject);
 
-                var op_val = new Variable($"{Which}_ab", Subject);
+                var op_val = Varn($"{Which}_ab", Subject);
 
                 FunctionEval BoundCheck(Variable x) =>
                     IsJoinElseMeet
@@ -94,22 +91,22 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     : Compare.Call(op_val, x); // Meet <= x
 
 
-                var test_correct = new FunctionDefinition(new FunctionSignature(VoidType.Instance, new($"test_{Which}"), new[] { a, b }),
-                    op_val.Declare(SynthesisTarget.Call(a,b)),
-                    If(Compare.Call(a,b),
+                var test_correct = new FunctionDefinition(new FunctionSignature(VoidType.Id, new($"test_{Which}"), a, b),
+                    op_val.Declare(SynthesisTarget.Call(a, b)),
+                    If(Compare.Call(a, b),
                         Assertion(
                             Eq.Call(op_val, IsJoinElseMeet ? b : a) // if a <= b: Join(a,b) = b, Meet(a,b) = a
                         )
-                    ).ElseIf(Compare.Call(b,a),
+                    ).ElseIf(Compare.Call(b, a),
                         Assertion(
                             Eq.Call(op_val, IsJoinElseMeet ? a : b) // if b <= a: Join(a,b) = a, Meet(a,b) = b
                         )
                     ).Else(
-                        Assertion(Op.And.Of(BoundCheck(a),BoundCheck(b))) // if incomparable: each(a,b) <= Join(a,b), Meet(a,b) <= each(a,b)
+                        Assertion(Op.And.Of(BoundCheck(a), BoundCheck(b))) // if incomparable: each(a,b) <= Join(a,b), Meet(a,b) <= each(a,b)
                     )
                 );
 
-                var forall_test_correct = Shared.GetForallTestHarness(test_correct, a, b);
+                var forall_test_correct = Shared.GetForallTestHarness(Subject, test_correct, a, b);
 
                 yield return Subject.GetStructDef();
                 yield return Eq;
@@ -128,13 +125,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             FunctionDefinition GetImproveHarness(FunctionDefinition prev_def) {
-                Variable a = new("a", Subject);
-                Variable b = new("b", Subject);
+                var a = Varn("a", Subject);
+                var b = Varn("b", Subject);
 
                 IExpression ab_incomparable = Not(Op.Or.Of(Compare.Call(a, b), Compare.Call(b, a)));
 
-                Variable prev_val = new($"prev_{Which}_ab", Subject);
-                Variable next_val = new($"next_{Which}_ab", Subject);
+                var prev_val = Varn($"prev_{Which}_ab", Subject);
+                var next_val = Varn($"next_{Which}_ab", Subject);
 
                 IExpression is_tighter_bound = IsJoinElseMeet
                     // next_join < prev_join
@@ -148,12 +145,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         Not(Compare.Call(next_val, prev_val))
                     );
 
-                return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Instance, new($"improve_{Which}"), Array.Empty<IVariableInfo>()),
+                return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"improve_{Which}")),
                     a.Declare(Subject.NewFromHoles()),
                     b.Declare(Subject.NewFromHoles()),
                     Assertion(ab_incomparable),
-                    prev_val.Declare(prev_def.Call(a,b)),
-                    next_val.Declare(SynthesisTarget.Call(a,b)),
+                    prev_val.Declare(prev_def.Call(a, b)),
+                    next_val.Declare(SynthesisTarget.Call(a, b)),
                     Assertion(is_tighter_bound)
                 );
             }

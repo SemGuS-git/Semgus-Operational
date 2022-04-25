@@ -1,13 +1,13 @@
 ﻿namespace Semgus.Util {
-    internal class Trie<T> {
+    internal class CharTrie<T> {
         public T? Value;
-        private Dictionary<char, Trie<T>> branches = new();
+        private readonly Dictionary<char, CharTrie<T>> branches = new();
 
-        public Trie<T> Get(char c) => branches![c];
+        public CharTrie<T> Get(char c) => branches[c];
 
-        public bool TryGet(char c, out Trie<T> t) => branches.TryGetValue(c, out t);
+        public bool TryGet(char c, out CharTrie<T> t) => branches.TryGetValue(c, out t);
 
-        public Trie<T> Branch(char c) {
+        public CharTrie<T> Branch(char c) {
             if (!branches.TryGetValue(c, out var t)) {
                 t = new();
                 branches[c] = t;
@@ -32,8 +32,8 @@
             t.Put(value);
         }
 
-        public static Trie<T> Build(IEnumerable<(string, T)> at_strings) {
-            var root = new Trie<T>();
+        public static CharTrie<T> Build(IEnumerable<(string, T)> at_strings) {
+            var root = new CharTrie<T>();
             foreach (var (s, t) in at_strings) root.Insert(s, t);
             return root;
         }

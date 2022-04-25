@@ -8,22 +8,6 @@ using System.Text.RegularExpressions;
 
 [assembly: InternalsVisibleTo("Semgus.SketchLang.Tests")]
 namespace Semgus.MiniParser {
-    internal class Parser<T> {
-        public readonly Symbol Symbol;
-
-        public Parser(Symbol s) {
-            this.Symbol = s;
-        }
-        public Result<T, ParseError> TryParse(string input) => Symbol.ParseString(input).Select(seq => seq.Cast<T>().Single());
-
-        public IEnumerable<T> ParseMany(string input) {
-            var a = Symbol.ParseString(input).Unwrap();
-            return a.Cast<T>();
-        }
-
-        public T Parse(string input) => ParseMany(input).Single();
-
-    }
 
     internal class SketchSyntaxParser {
         public static SketchSyntaxParser Instance { get; } = new();
@@ -34,9 +18,9 @@ namespace Semgus.MiniParser {
         public Parser<Literal> Literal { get; }
         public Parser<IExpression> Expression { get; }
         public Parser<IStatement> Statement { get; }
-        public Parser<IVariableInfo> FunctionArg { get; }
-        public Parser<IVariableInfo> FunctionArgList { get; }
-        public Parser<FunctionSignature> WeakFunctionSignature { get; }
+        public Parser<FunctionArg> FunctionArg { get; }
+        public Parser<FunctionArg> FunctionArgList { get; }
+        public Parser<FunctionSignature> FunctionSignature { get; }
         public Parser<FunctionDefinition> FunctionDefinition { get; }
         public Parser<StructDefinition> StructDefinition { get; }
         public Parser<IfStatement> IfStatement { get; }
@@ -44,7 +28,7 @@ namespace Semgus.MiniParser {
         public Parser<AssertStatement> AssertStatement { get; }
         public Parser<ReturnStatement> ReturnStatement { get; }
         public Parser<MinimizeStatement> MinimizeStatement { get; }
-        public Parser<WeakVariableDeclaration> WeakVariableDeclaration { get; }
+        public Parser<VariableDeclaration> WeakVariableDeclaration { get; }
         public Parser<ISettable> Settable { get; }
         public Parser<Assignment> Assignment { get; }
         public Parser<StructNew> StructNew { get; }
@@ -92,7 +76,7 @@ namespace Semgus.MiniParser {
 
 
             var call_ctor = ("new" + identifier + "(" + (assign + ("," + assign).Star()).Maybe() + ")")
-                .Transform(ctx => new StructNew(ctx.Skip<KeywordSymbol>().Take<Identifier>(), ctx.TakeStar<Assignment>()));
+                .Transform(ctx => new StructNew(ctx.Skip<KeywordInstance>().Take<Identifier>(), ctx.TakeStar<Assignment>()));
             call_ctor.Name = "new_struct";
 
             var unary = (call_ctor | call | unit);
@@ -123,32 +107,40 @@ namespace Semgus.MiniParser {
             expression.Install(e_tern);
             expression.Name = "expression";
 
-            var declare_var = (identifier + identifier + ("=" + expression).Maybe())
+            var variable = (identifier + identifier)
                 .Transform(ctx => {
-                    var a = ctx.Take<Identifier>();
-                    var b = ctx.Take<Identifier>();
-                    var c = ctx.TrySkipKeyword("=") ? ctx.Take<IExpression>() : Empty.Instance;
-                    return new WeakVariableDeclaration(a, b, c);
+                    var typeId = ctx.Take<Identifier>();
+                    var id = ctx.Take<Identifier>();
+                    return new Variable(id, typeId);
+                }); 
+            variable.Name = "variable";
+
+            var declare_var = (variable + ("=" + expression).Maybe())
+                .Transform(ctx => {
+                    var a = ctx.Take<Variable>();
+                    var b = ctx.TrySkipKeyword("=") ? ctx.Take<IExpression>() : Empty.Instance;
+                    return new VariableDeclaration(a, b);
                 });
             declare_var.Name = "declare_var";
 
-            var def_struct = ("struct" + identifier + "{" + (declare_var + ";").Some() + "}")
+
+            var def_struct = ("struct" + identifier + "{" + (variable + ";").Some() + "}")
                 .Transform(ctx => {
-                    var id = ctx.Skip<KeywordSymbol>().Take<Identifier>();
-                    var decs = ctx.TakeStar<WeakVariableDeclaration>();
+                    var id = ctx.SkipKeyword("struct").Take<Identifier>();
+                    var decs = ctx.TakeStar<Variable>();
                     return new StructDefinition(id, decs);
                 });
             def_struct.Name = "def_struct";
 
             var exclaim = ((Kw("assert") | "minimize") + expression)
-                .Transform(ctx => ctx.Take<KeywordSymbol>().Value switch {
+                .Transform(ctx => ctx.Take<KeywordInstance>().Value switch {
                     "assert" => new AssertStatement(ctx.Take<IExpression>()),
                     "minimize" => new MinimizeStatement(ctx.Take<IExpression>()),
                     _ => throw new Exception()
                 });
 
             var returns = ("return" + expression.Maybe())
-                .Transform(ctx => ctx.Skip<KeywordSymbol>().TryTake<IExpression>(out var expr) ? new ReturnStatement(expr) : new ReturnStatement());
+                .Transform(ctx => ctx.Skip<KeywordInstance>().TryTake<IExpression>(out var expr) ? new ReturnStatement(expr) : new ReturnStatement());
 
             var line = (declare_var | assign | call | returns | exclaim) + ";";
             line.Name = "line";
@@ -160,7 +152,7 @@ namespace Semgus.MiniParser {
                     ctx.SkipKeyword("if").Take<IExpression>(),
                     ctx.TakeStar<IStatement>().ToList(),
                     (
-                        ctx.TryTake<KeywordSymbol>(out _)
+                        ctx.TryTake<KeywordInstance>(out _)
                         ? ctx.TakeStar<IStatement>()
                         : Array.Empty<IStatement>()).ToList()
                     )
@@ -169,16 +161,15 @@ namespace Semgus.MiniParser {
             statement.list.Add(ite);
 
             var repeat = (Kw("repeat") + "(" + expression + ")" + (statement | "{" + statement.Star() + "}"))
-                .Transform(ctx => new RepeatStatement(ctx.Skip<KeywordSymbol>().Take<IExpression>(), ctx.TakeStar<IStatement>()));
+                .Transform(ctx => new RepeatStatement(ctx.Skip<KeywordInstance>().Take<IExpression>(), ctx.TakeStar<IStatement>()));
 
             statement.list.Add(repeat);
 
 
-            var fn_arg = (Kw("ref").Maybe() + identifier + identifier)
+            var fn_arg = (Kw("ref").Maybe() + variable)
                 .Transform(ctx => {
                     var is_ref = ctx.TrySkipKeyword("ref");
-                    var dec = new WeakVariableDeclaration(ctx.Take<Identifier>(), ctx.Take<Identifier>());
-                    return is_ref ? new RefVariableDeclaration(dec) : dec;
+                    return new FunctionArg(ctx.Take<Variable>(), is_ref);
                 });
 
             var fn_arg_list = "(" + (fn_arg + ("," + fn_arg).Star()).Maybe() + ")";
@@ -191,11 +182,12 @@ namespace Semgus.MiniParser {
             var fn_sig = ((Kw("harness") | "generator").Maybe() + identifier + identifier + fn_arg_list + ("implements" + identifier).Maybe())
                 .Transform(ctx =>
                     new FunctionSignature(
-                        Flag: ctx.TryTakeKeywordFrom(modmaps, out var mod) ? mod : FunctionModifier.None,
+                        Flag: ctx.TryTakeMappedKeyword(modmaps, out var mod) ? mod : FunctionModifier.None,
                         ReturnTypeId: ctx.Take<Identifier>(),
                         Id: ctx.Take<Identifier>(),
-                        Args: ctx.TakeStar<IVariableInfo>()
-                    ) { ImplementsId = ctx.TrySkipKeyword("implements") ? ctx.Take<Identifier>() : null }
+                        Args: ctx.TakeStar<FunctionArg>(),
+                        ctx.TrySkipKeyword("implements") ? ctx.Take<Identifier>() : null
+                    )
                 );
 
             var def_function = (fn_sig + "{" + statement.Star() + "}")
@@ -219,7 +211,7 @@ namespace Semgus.MiniParser {
             Statement = new(statement);
             FunctionArg = new(fn_arg);
             FunctionArgList = new(fn_arg_list);
-            WeakFunctionSignature = new(fn_sig);
+            FunctionSignature = new(fn_sig);
             FunctionDefinition = new(def_function);
             StructDefinition = new(def_struct);
             IfStatement = new(ite);
@@ -264,7 +256,7 @@ namespace Semgus.MiniParser {
 
             return Result.Ok<(string header, string body, string footer), Exception>((
                 raw.Substring(0, body_start),
-                raw.Substring(body_start, body_end-body_start),
+                raw.Substring(body_start, body_end - body_start),
                 raw.Substring(body_end)
             ));
         }

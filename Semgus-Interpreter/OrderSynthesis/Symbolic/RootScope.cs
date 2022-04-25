@@ -3,11 +3,11 @@ using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal class RootScope : InvocationScope {
-        private readonly HashSet<Identifier> _refVariables;
+        private readonly HashSet<Identifier> _refArgIds;
 
 
         public RootScope(FunctionDefinition fn) : base(fn) {
-            this._refVariables = fn.Signature.Args.Where(a => a is RefVariableDeclaration).Select(a => a.Id).ToHashSet();
+            this._refArgIds = fn.Signature.Args.Where(a => a.IsRef).Select(a => a.Id).ToHashSet();
         }
 
         public void Initialize(FunctionDefinition fn) => Initialize(fn, fn.Signature.Args.Select(vi => new VariableRef(vi.Id)).ToList());
@@ -34,7 +34,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             Dictionary<Identifier, IExpression> refVars = new(), globals = new();
 
             foreach (var assigned in LocalAssigns) {
-                if (_refVariables.Contains(assigned.Key)) {
+                if (_refArgIds.Contains(assigned.Key)) {
                     refVars.Add(assigned.Key, assigned.Value);
                 } else if (!LocalDefines.Contains(assigned.Key)) {
                     globals.Add(assigned.Key, assigned.Value);

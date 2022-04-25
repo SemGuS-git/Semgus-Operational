@@ -19,13 +19,13 @@ namespace Semgus.MiniParser {
         }
 
         public static Symbol Prefix(this Symbol term, params Symbol[] ops) => (Earliest.Of(ops) + term)
-            .Transform(ctx => new UnaryOperation(ctx.TakeKeywordFrom(UnaryMap), ctx.Take<IExpression>()));
+            .Transform(ctx => new UnaryOperation(ctx.TakeMappedKeyword(UnaryMap), ctx.Take<IExpression>()));
 
         public static Symbol Binary(this Symbol term, params Symbol[] ops) => (term + Maybe(Earliest.Of(ops) + term))
             .Transform((ctx) => {
                 var head = ctx.Take<IExpression>();
 
-                if (ctx.TryTakeKeywordFrom(InfixMap, out var op)) {
+                if (ctx.TryTakeMappedKeyword(InfixMap, out var op)) {
                     var tail = ctx.Take<IExpression>();
                     return new InfixOperation(op, head, tail);
                 } else {
@@ -38,7 +38,7 @@ namespace Semgus.MiniParser {
                 var head = ctx.Take<IExpression>();
 
                 List<(Op, IExpression)> tail = new();
-                while (ctx.TryTakeKeywordFrom(InfixMap, out var op)) {
+                while (ctx.TryTakeMappedKeyword(InfixMap, out var op)) {
                     tail.Add((op, ctx.Take<IExpression>()));
                 }
 
@@ -47,7 +47,7 @@ namespace Semgus.MiniParser {
             }
         );
 
-        public static Result<IEnumerable<INode>, ParseError> ParseString(this Symbol symbol, string raw) {
+        public static Result<IEnumerable<ISyntaxNode>, ParseError> ParseString(this Symbol symbol, string raw) {
             var tokens = TokenSet.ForSketch.Scan(raw).Where(t => t is not LineComment && t is not BlockComment);
             var tape = new TapeEnumerator<IToken>(new AccumulatorTape<IToken>(tokens));
             tape.MoveNext();

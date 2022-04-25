@@ -26,7 +26,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Iter = iter;
             (StructTypeMap, Structs, MonotoneFunctions, PrevComparisons) = config;
 
-            Budgets = Structs.Select(s => new Variable("budget_" + s.Name, IntType.Instance)).ToList();
+            Budgets = Structs.Select(s => new Variable($"budget_{s.Id}", IntType.Id)).ToList();
 
             Debug.Assert(PrevComparisons.All(f => StructTypeMap.TryGetValue(f.Signature.Args[0].TypeId, out var st) && f.Signature.Id != st.CompareId));
         }
@@ -47,8 +47,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 yield return st.GetDisjunctGenerator();
             }
 
-            yield return BitType.GetAtom();
-            yield return IntType.GetAtom();
+            yield return CompareAtomGenerators.GetBitAtom();
+            yield return CompareAtomGenerators.GetIntAtom();
 
             foreach (var fn in MonotoneFunctions) {
                 yield return fn.Function;
@@ -68,7 +68,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new Annotation("Check partial equality properties", 2));
             foreach (var c in clasps) {
-                body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0], c.Indexed[1], c.Indexed[2]));
+                body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0].Sig(), c.Indexed[1].Sig(), c.Indexed[2].Sig()));
             }
 
             body.Add(new Annotation("Monotonicity", 2));
@@ -91,12 +91,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new MinimizeStatement(Op.Plus.Of(Budgets.Select(b => b.Ref()).ToList())));
 
-            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("main"), input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
         }
 
         private static IEnumerable<IStatement> GetExpansionAssertions(StructType type, Variable budget, Identifier prev, Variable expFlag) {
-            Variable a = new(type.Name + "_new0", type);
-            Variable b = new(type.Name + "_new1", type);
+            var a = Varn($"{type.Id}_new0", type.Id);
+            var b = Varn($"{type.Id}_new1", type.Id);
 
             yield return new AssertStatement(Op.Geq.Of(budget.Ref(), Lit0));
 

@@ -11,35 +11,41 @@ namespace Semgus.OrderSynthesis.Subproblems {
             static Assignment AdjustedAssign(Variable lhs, Variable rhs)
                 => lhs.Assign(lhs.TypeId == IntType.Id ? Op.Minus.Of(rhs.Ref(), IntOffset) : rhs.Ref());
 
-            static (IReadOnlyList<Variable> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<Variable> input_structs) {
-                List<Variable> input_args = new();
+            static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(StructType st, IReadOnlyList<Variable> input_structs) {
+                List<FunctionArg> input_args = new();
                 List<IStatement> input_assembly_statements = new();
 
                 input_assembly_statements.Add(new Annotation("Assemble structs"));
 
                 foreach (var obj in input_structs) {
-                    if (obj.Type is not StructType st) throw new NotSupportedException();
-                    List<Variable> locals = new();
+                    if (obj.TypeId != st.Id) throw new ArgumentException();
+                    List<FunctionArg> locals = new();
                     foreach (var prop in st.Elements) {
-                        if (prop.Type is StructType) throw new NotSupportedException();
-                        locals.Add(new Variable($"{obj.Id}_{prop.Id}", prop.Type));
+                        //if (prop.Type is StructType) throw new NotSupportedException();
+                        locals.Add(new(new($"{obj.Id}_{prop.Id}", prop.TypeId)));
                     }
 
                     input_args.AddRange(locals);
-                    input_assembly_statements.Add(new VariableDeclaration(obj, st.New(st.Elements.Select((prop, i) => AdjustedAssign(prop, locals[i])))));
+                    input_assembly_statements.Add(
+                        obj.Declare(
+                            st.New(
+                                st.Elements.Select((prop, i) => AdjustedAssign(prop, locals[i].Variable))
+                            )
+                        )
+                    );
                 }
 
                 return (input_args, input_assembly_statements);
             }
 
-            public static FunctionDefinition GetForallTestHarness(FunctionDefinition test, params Variable[] vars) {
+            public static FunctionDefinition GetForallTestHarness(StructType st, FunctionDefinition test, params Variable[] vars) {
                 List<IStatement> body = new();
-                var (input_args, input_assembly_statements) = GetMainInitContent(vars);
+                var (input_args, input_assembly_statements) = GetMainInitContent(st, vars);
 
                 body.AddRange(input_assembly_statements);
                 body.Add(test.Call(vars.Select(v => v.Ref()).ToList()));
 
-                return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Instance, new("forall_" + test.Id.Name), input_args), body);
+                return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("forall_" + test.Id.Name), input_args), body);
             }
         }
     }
