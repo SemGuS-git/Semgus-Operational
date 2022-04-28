@@ -90,7 +90,7 @@ namespace Semgus {
                 if (productions.TryGetValue(key, out prod!)) {
                     if (!(prod.InputVariables.SequenceEqual(variables.Inputs) && prod.OutputVariables.SequenceEqual(variables.Outputs))) throw new InvalidDataException("Mismatching variable sets for different CHCs under same production");
                 } else {
-                    prod = new(binder.ParentType, binder.Constructor, variables.Inputs.ToList(), variables.Outputs.ToList());
+                    prod = new(productions.Count, binder.ParentType, binder.Constructor, variables.Inputs.ToList(), variables.Outputs.ToList());
                     productions.Add(key, prod);
                 }
                 var helper = new NamespaceContext(theory, relations, new LocalScopeTerms(chc), variables);

@@ -21,8 +21,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             if (!structs_by_term_type.ContainsKey(key)) {
                 var n = structs_by_term_type.Count;
-                StructType st_input = new(new($"In_{n}"), inputs.Select(VarToProp).ToList()) { Comment = $"{termType.Name} inputs: ({SmtArgListString(inputs)})" };
-                StructType st_output = new(new($"Out_{n}"), outputs.Select(VarToProp).ToList()) { Comment = $"{termType.Name} outputs: ({SmtArgListString(outputs)})" };
+                StructType st_input = new(new($"ttype{n}_in"), inputs.Select(VarToProp).ToList()) { Comment = $"{termType.Name} inputs: ({SmtArgListString(inputs)})" };
+                StructType st_output = new(new($"ttype{n}_out"), outputs.Select(VarToProp).ToList()) { Comment = $"{termType.Name} outputs: ({SmtArgListString(outputs)})" };
                 structs_by_term_type.Add(key, (st_input, st_output));
                 all_structs.Add(st_input.Id, st_input);
                 all_structs.Add(st_output.Id, st_output);
@@ -31,7 +31,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         private string SmtArgListString(IEnumerable<VariableInfo> args) => string.Join(" ", args.Select(a => $"({a.Sort.Name} {a.Name})"));
 
-        private static Variable VarToProp(VariableInfo sem_var, int i) => new($"v{i}", MapSortToPrimTypeId(sem_var.Sort));
+        private static Variable VarToProp(VariableInfo sem_var) => new($"v{sem_var.Index}", MapSortToPrimTypeId(sem_var.Sort));
 
         private static Identifier MapSortToPrimTypeId(SmtSort sort) {
             if (sort.Name == SmtCommonIdentifiers.BoolSortId) return BitType.Id;

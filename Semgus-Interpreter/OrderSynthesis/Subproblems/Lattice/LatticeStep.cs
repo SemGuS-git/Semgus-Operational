@@ -9,7 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal record LatticeDefs(StructType type, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join, FunctionDefinition meet) {
+    internal record LatticeDefs(StructType type, FunctionDefinition compare, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join, FunctionDefinition meet) {
         internal IEnumerable<FunctionDefinition> GetEach() {
             yield return top;
             yield return bot;
@@ -73,6 +73,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             return new(
                 type,
+                compare,
                 final[gen_top.SynthFunId],
                 final[gen_bot.SynthFunId],
                 final[gen_join.SynthFunId],

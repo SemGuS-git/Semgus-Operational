@@ -88,7 +88,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, type.NonEqId),
                 var_a.Declare(type.NewFromHoles()),
-                var_a.Declare(type.NewFromHoles()),
+                var_b.Declare(type.NewFromHoles()),
                 Assertion(Not(type.EqId.Call(var_a, var_b))),
                 Assertion(type.CompareId.Call(var_a, var_b))
             );

@@ -14,9 +14,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             ArgMonotonicities = argMonotonicities;
         }
 
-        public static MonotoneLabeling None(FunctionDefinition function) {
-            return new(function, function.Signature.Args.Select(a => Monotonicity.None).ToList());
-        }
+        public static MonotoneLabeling ZeroArgument(FunctionDefinition function) => new(function, Array.Empty<Monotonicity>());
 
         public static async Task<IEnumerable<MonotoneLabeling>> ExtractFromJson(IReadOnlyList<FunctionDefinition> functions, string fname) {
             using var fs = File.OpenRead(fname);

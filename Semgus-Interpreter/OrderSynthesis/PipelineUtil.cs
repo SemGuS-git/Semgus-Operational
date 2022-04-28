@@ -25,9 +25,9 @@ namespace Semgus.OrderSynthesis {
             if (state.Comparisons is not null) {
                 PipelineUtil.WriteSketchFile(path.Append("comparisons.sk"), state.Comparisons);
             }
-            if (state.AllMonotonicities is not null) {
+            if (state.LabeledTransformers is not null) {
                 var obj = new SortedDictionary<string, MonoOutputLine>();
-                foreach (var a in state.AllMonotonicities) {
+                foreach (var a in state.LabeledTransformers) {
                     obj.Add(a.Function.Id.ToString(), new(a.Function.Alias!, a.ArgMonotonicities));
                 }
 

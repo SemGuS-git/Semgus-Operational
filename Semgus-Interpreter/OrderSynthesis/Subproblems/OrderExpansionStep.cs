@@ -182,7 +182,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     .Select(c => c with { Signature = c.Signature with { Id = new("prev_" + c.Id.Name) } })
                     .ToList();
 
-                var refinement_step = new OrderExpansionStep(i, new(state.StructTypeMap, state.StructTypeList, state.MonotoneFunctions, prev_compare));
+                var refinement_step = new OrderExpansionStep(i, new(state.StructTypeMap, state.StructTypeList, state.LabeledTransformers!.Where(tf=>tf.Any).ToList(), prev_compare));
 
                 var dir_refinement = dir.Append($"iter_{i}/");
 

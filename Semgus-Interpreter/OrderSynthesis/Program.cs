@@ -2,6 +2,7 @@
 
 using Semgus.CommandLineInterface;
 using Semgus.Operational;
+using Semgus.OrderSynthesis.AbstractInterpretation;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.Subproblems;
 using System.Diagnostics;
@@ -18,11 +19,17 @@ namespace Semgus.OrderSynthesis {
 
             FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{Path.GetFileName(file)}/");
 
-            var result = await RunPipeline(dir, file, true);
+            var items = ParseUtil.TypicalItems.Acquire(file); // May throw
+            var preinit = AbstractPreInit.From(items.Grammar, items.Library); // May throw
 
+            var result = await RunPipeline(dir, preinit, true);
+            var abs_sem = preinit.Hydrate(result.Lattices!, result.LabeledTransformers!);
+
+
+            Console.WriteLine("--- Abs sem constructed ---");
         }
 
-        static async Task<PipelineState> RunPipeline(FlexPath dir, string input_file, bool reuse_previous = false) {
+        static async Task<PipelineState> RunPipeline(FlexPath dir, AbstractPreInit preInit, bool reuse_previous = false) {
             if (reuse_previous) {
                 if (!Directory.Exists(dir.PathWin)) throw new DirectoryNotFoundException(dir.PathWin);
                 var temp_storage_dir = dir.Append("../_temp/");
@@ -50,9 +57,7 @@ namespace Semgus.OrderSynthesis {
 
             try {
                 {
-                    var items = ParseUtil.TypicalItems.Acquire(input_file); // May throw
-
-                    var step = MonotonicityStep.FromSemgusGrammar(items.Grammar); // May throw
+                    var step = new MonotonicityStepBuilder(preInit).Build();
 
                     state = new(PipelineState.Step.Initial, step.StructTypeMap, step.Structs);
 
@@ -61,8 +66,7 @@ namespace Semgus.OrderSynthesis {
                     state = state with {
                         Reached = PipelineState.Step.Monotonicity,
                         Comparisons = result.Comparisons,
-                        MonotoneFunctions = result.MonoFunctions,
-                        AllMonotonicities = result.MonoFunctions.Concat(result.NonMonoFunctions.Select(MonotoneLabeling.None)).ToList()
+                        LabeledTransformers = result.LabeledTransformers
                     };
                 }
 

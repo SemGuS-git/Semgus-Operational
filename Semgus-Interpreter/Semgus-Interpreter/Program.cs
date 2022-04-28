@@ -39,7 +39,7 @@ public static class Program {
         var sf = handler.OutSem.SynthFuns.Single();
         var bc = handler.OutSem.Constraints.Where(c=>InductiveConstraintConverter.IsShapedLikeBehaviorExampleFor(sf,c)).ToList();
 
-        var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.Relations).ProcessConstraints(bc);
+        var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.SemanticRelations).ProcessConstraints(bc);
 
         Console.WriteLine("OK 4");
         var solver = new BottomUpSolver(new() { CostFunction = TermCostFunction.Size, Reductions = new(){ ReductionMethod.ObservationalEquivalence} });

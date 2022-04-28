@@ -11,56 +11,23 @@ namespace Semgus.OrderSynthesis.Subproblems {
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
-
-        private IReadOnlyList<FunctionDefinition> NonMonotoneFunctions { get; }
+        private IReadOnlyList<MonotoneLabeling> ConstantTransformers { get; }
+        public IReadOnlyList<Identifier> OrderedFunctionIds { get; }
 
         public MonotonicityStep(
             IReadOnlyList<StructType> structs,
             IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions,
-            IReadOnlyList<FunctionDefinition> nonMonotoneFunctions
+            IReadOnlyList<MonotoneLabeling> constantTransformers,
+            IReadOnlyList<Identifier> orderedFunctionIds
         ) {
             Structs = structs;
             StructTypeMap = structs.ToDictionary(s => s.Id);
             MaybeMonotoneFunctions = maybeMonotoneFunctions;
-            NonMonotoneFunctions = nonMonotoneFunctions;
+            ConstantTransformers = constantTransformers;
+            OrderedFunctionIds = orderedFunctionIds;
         }
 
-        public static MonotonicityStep FromSemgusGrammar(Operational.InterpretationGrammar grammar) {
-            List<Semgus.Operational.SemanticRuleInterpreter> all_sem = new();
-            List<FunctionDefinition> functions = new();
-            Dictionary<Identifier, StructType> observed_struct_types = new();
-            List<FunctionDefinition> non_mono = new();
-
-            SemToSketchConverter converter = new();
-
-            foreach (var prod in grammar.Productions.Values.SelectMany(val => val.Select(mu => mu.Production)).Distinct()) {
-                if (prod.Semantics.Count != 1) throw new NotImplementedException();
-                converter.EncompassStructTypes(prod);
-                all_sem.Add(prod.Semantics[0]);
-            }
-
-            foreach (var sem in all_sem) {
-                var fn = converter.OpSemToFunction(new($"lang_f{functions.Count + non_mono.Count}"), sem.ProductionRule, sem.Steps);
-                fn.Alias = sem.ProductionRule.ToString();
-
-                var sig = fn.Signature;
-
-                // skip constant functions, e.g. literals
-                if (sig.Args.Count == 0) {
-                    non_mono.Add(fn);
-                    continue;
-                }
-
-                functions.Add(fn);
-
-                observed_struct_types.TryAdd(sig.ReturnTypeId, converter.GetStructType(sig.ReturnTypeId));
-                foreach (var arg in sig.Args) {
-                    observed_struct_types.TryAdd(arg.TypeId, converter.GetStructType(arg.TypeId));
-                }
-            }
-
-            return new(observed_struct_types.Values.ToList(), functions, non_mono);
-        }
+        //static string SmtArgListString(IEnumerable<Operational.VariableInfo> args) => string.Join(" ", args.Select(a => $"({a.Sort.Name} {a.Name})"));
 
         public IEnumerable<IStatement> GetFile() {
             foreach (var st in Structs) {
@@ -182,7 +149,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             return (input_args, input_assembly_statements);
         }
-        public record Output(IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<MonotoneLabeling> MonoFunctions, IReadOnlyList<FunctionDefinition> NonMonoFunctions);
+        public record Output(IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<MonotoneLabeling> LabeledTransformers);
 
         public async Task<Output> Execute(FlexPath dir, bool reuse_previous = false) {
             var file_in = dir.Append("input.sk");
@@ -228,7 +195,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             IReadOnlyList<FunctionDefinition> compacted = PipelineUtil.ReduceEachToSingleExpression(compare_functions); // May throw
 
-            return new(compacted, mono, NonMonotoneFunctions);
+            return new(compacted, Sequence(OrderedFunctionIds, mono.Concat(ConstantTransformers)));
+        }
+
+        private static IReadOnlyList<MonotoneLabeling> Sequence(IReadOnlyList<Identifier> indices, IEnumerable<MonotoneLabeling> items) {
+            var dict = items.ToDictionary(q => q.Function.Id);
+            return indices.Select(i => dict[i]).ToList();
         }
 
         private async Task<IReadOnlyList<MonotoneLabeling>> InspectMonotonicities(FlexPath file_in, FlexPath file_holes, FlexPath file_mono) {

@@ -39,7 +39,7 @@ namespace Semgus.CommandLineInterface {
                 var lib = OperationalConverter.ProcessProductions(smt.Theories, sem.Chcs);
                 var sf = sem.SynthFuns.Single();
                 var grammar = OperationalConverter.ProcessGrammar(sf.Grammar, lib);
-                var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.Relations).ProcessConstraints(sem.Constraints);
+                var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.SemanticRelations).ProcessConstraints(sem.Constraints);
 
                 var tests = info.Where(a => a.Keyword.Name == "test").SelectMany(a => DemoBlockConverter.ProcessAttributeValue(lib, a.Value)).ToList();
                 var solns = info.Where(a => a.Keyword.Name == "solution").SelectMany(a => SolutionBlockConverter.ProcessAttributeValue(sem.SynthFuns, lib, a.Value)).ToList();

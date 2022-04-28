@@ -7,8 +7,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
         IReadOnlyList<StructType> StructTypeList,
         IReadOnlyList<FunctionDefinition>? Comparisons,
-        IReadOnlyList<MonotoneLabeling>? MonotoneFunctions,
-        IReadOnlyList<MonotoneLabeling>? AllMonotonicities,
+        IReadOnlyList<MonotoneLabeling>? LabeledTransformers,
         IReadOnlyList<LatticeDefs>? Lattices
     ) {
         public enum Step {
@@ -22,7 +21,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Step reached,
             IReadOnlyDictionary<Identifier, StructType> structTypeMap,
             IReadOnlyList<StructType> structTypeList
-        ) : this(reached, structTypeMap, structTypeList, null, null, null, null) { }
+        ) : this(reached, structTypeMap, structTypeList, null, null, null) { }
 
     }
 }
