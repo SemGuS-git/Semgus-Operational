@@ -76,7 +76,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
 
-        public async Task<Output> Execute(FlexPath dir) {
+        public async Task<Output> Execute(FlexPath dir, bool reuse_prev = false) {
             Directory.CreateDirectory(dir.PathWin);
 
             var file_in = dir.Append("input.sk");
@@ -84,24 +84,32 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var file_holes = dir.Append("result.holes.xml");
             //var file_cmp = dir.Append("result.comparisons.sk");
 
-            System.Console.WriteLine($"--- [Reduction] Writing input file at {file_in} ---");
-
-            using (StreamWriter sw = new(file_in.PathWin)) {
-                LineReceiver receiver = new(sw);
-                foreach (var a in this.GetFile()) {
-                    a.WriteInto(receiver);
+            if (reuse_prev) {
+                System.Console.WriteLine($"--- [Reduction] Reusing prev ---");
+                if (!File.Exists(file_out.PathWin)) {
+                    System.Console.WriteLine($"--- [Reduction] No prev result (throw) ---");
+                    throw new Exception("Oof");
                 }
-            }
-
-            System.Console.WriteLine($"--- [Reduction] Invoking Sketch on {file_in} ---");
-
-            var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (step2_sketch_result) {
-                Console.WriteLine($"--- [Reduction] Sketch succeeded ---");
             } else {
-                Console.WriteLine($"--- [Reduction] Sketch rejected; reduction failed ---");
-                throw new Exception("Sketch rejected");
+                System.Console.WriteLine($"--- [Reduction] Writing input file at {file_in} ---");
+
+                using (StreamWriter sw = new(file_in.PathWin)) {
+                    LineReceiver receiver = new(sw);
+                    foreach (var a in this.GetFile()) {
+                        a.WriteInto(receiver);
+                    }
+                }
+
+                System.Console.WriteLine($"--- [Reduction] Invoking Sketch on {file_in} ---");
+
+                var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
+
+                if (step2_sketch_result) {
+                    Console.WriteLine($"--- [Reduction] Sketch succeeded ---");
+                } else {
+                    Console.WriteLine($"--- [Reduction] Sketch rejected; reduction failed ---");
+                    throw new Exception("Sketch rejected");
+                }
             }
 
             Console.WriteLine($"--- [Reduction] Reading compare functions ---");

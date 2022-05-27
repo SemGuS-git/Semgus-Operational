@@ -7,36 +7,20 @@ using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal class MonotonicityStepBuilder {
-        static Identifier MapSortToPrimTypeId(Model.Smt.SmtSort sort) {
-            if (sort.Name == Model.Smt.SmtCommonIdentifiers.BoolSortId) return BitType.Id;
-            if (sort.Name == Model.Smt.SmtCommonIdentifiers.IntSortId) return IntType.Id;
-            throw new NotSupportedException();
-        }
-
 
         AbstractPreInit preInit;
-        Dictionary<TupleId, StructType> struct_type_dict;
+        IReadOnlyDictionary<Identifier, StructType> struct_type_dict;
 
         public MonotonicityStepBuilder(AbstractPreInit preInit) {
             this.preInit = preInit;
-            this.struct_type_dict = new();
-
-            foreach (var (id, sorts) in preInit.UniqueTupleTypes) {
-                struct_type_dict.Add(id, new(
-                    new($"st{struct_type_dict.Count}"),
-                    sorts.Select((s, i)
-                        => new Variable($"v{i}", MapSortToPrimTypeId(s))
-                    ).ToList()
-                ));
-            }
+            this.struct_type_dict = preInit.UniqueTupleTypes;
         }
 
-        StructType GetStructType(TupleId id) => struct_type_dict[preInit.Resolver.Resolve(id)];
 
         (StructNew, IReadOnlyList<FunctionArg>) GetConcreteTransformerBody(Operational.ProductionRuleInterpreter prod, LinearTermSubtreeAbstraction ltsa, ConcreteTransformerCore ctc) {
             var ttkey = prod.TermType.Name.Name.Symbol;
-            var sem_input = GetStructType(new(ttkey, true));
-            var sem_output = GetStructType(new(ttkey, false));
+
+            var (sem_input, sem_output) = preInit.GetIOStructs(prod.TermType);
 
             HashSet<string> inputVarNames = new(prod.InputVariables.Select(v => v.Name));
             List<FunctionArg> fargs = new();
@@ -49,14 +33,16 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 nspace.VarMap.Add(prod.InputVariables[i].Name, f_input_i);
             }
 
-            if (ctc.RequiredTupleIndices.Contains(0)) fargs.Add(f_input_tuple);
+            // TODO: fix or remove check
+            if (true || ctc.RequiredTupleIndices.Contains(0)) fargs.Add(f_input_tuple);
 
             foreach (AbstractTermEvalStep v in ltsa.Steps) {
                 var output_idx = v.OutputTupleIndex;
-                if (!ctc.RequiredTupleIndices.Contains(output_idx)) continue;
+                // TODO: fix or remove check
+                //if (!ctc.RequiredTupleIndices.Contains(output_idx)) continue;
                 var term_idx = v.NodeTermIndex;
 
-                var target_out = struct_type_dict[preInit.Resolver.Resolve(v.OutputTupleKind)];
+                var (_, target_out) = preInit.GetIOStructs(v.src.Term);
 
                 Variable var_output_tuple = new($"y{output_idx - 1}", target_out.Id);
                 fargs.Add(new(var_output_tuple));

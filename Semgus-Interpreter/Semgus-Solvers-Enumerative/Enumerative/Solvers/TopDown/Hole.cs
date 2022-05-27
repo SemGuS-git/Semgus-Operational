@@ -12,7 +12,7 @@ namespace Semgus.Solvers.Enumerative {
 
         public IEnumerable<IDSLSyntaxNode> ChildNodes => null;
         public ProductionRuleInterpreter ProductionRule => throw new InvalidOperationException();
-        public IReadOnlyList<IDSLSyntaxNode> AddressableTerms => throw new InvalidOperationException();
+        public IReadOnlyList<IDSLSyntaxNode> AddressableTerms { get; } = Array.Empty<IDSLSyntaxNode>();
 
         public int Size => _cost;
         public int Height => throw new NotImplementedException();

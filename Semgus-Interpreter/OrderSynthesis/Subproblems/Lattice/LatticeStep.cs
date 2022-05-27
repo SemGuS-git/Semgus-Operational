@@ -26,7 +26,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         public record Output(IReadOnlyList<LatticeDefs> Lattices);
 
-        private static async Task<LatticeDefs> DoOne(FlexPath dir, StructType type, FunctionDefinition compare) {
+        private static async Task<LatticeDefs> DoOne(FlexPath dir, StructType type, FunctionDefinition compare, bool skip_refine) {
 
             var gen_top = new TopOrBot(true, type, compare);
             var gen_bot = new TopOrBot(false, type, compare);
@@ -47,7 +47,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 FunctionDefinition? synth_item = null;
 
                 const int MAX_ITER = 100;
-                for (int i = 0; i < MAX_ITER; i++) {
+                for (int i = 0; i < (skip_refine ? 1 : MAX_ITER); i++) {
                     Directory.CreateDirectory(current_zone.PathWin);
 
                     var file_in = current_zone.Append("input.sk");
@@ -90,7 +90,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
 
-        public async Task<Output> Execute(FlexPath dir) {
+        public async Task<Output> Execute(FlexPath dir, bool skip_refine) {
             Directory.CreateDirectory(dir.PathWin);
 
             System.Console.WriteLine($"--- [Lattice] starting ---");
@@ -98,7 +98,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             List<LatticeDefs> output = new();
 
             foreach (var (type, compare) in Targets) {
-                var result = await DoOne(dir.Append($"{type.Id}/"), type, compare);
+                var result = await DoOne(dir.Append($"{type.Id}/"), type, compare, skip_refine);
                 output.Add(result);
 
                 PipelineUtil.WriteSketchFile(dir.Append($"{type.Id}.lattice.sk"), result.GetEach());

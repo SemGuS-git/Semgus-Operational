@@ -12,5 +12,4 @@ namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
             this.FlatToPropMap = flat_to_prop_map;
         }
     }
-
 }

@@ -13,8 +13,6 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             tuple_values[0] = main_input;
 
             foreach (var step in Steps) {
-
-
                 if (!absSem.Interpret(
                     node.AddressableTerms[step.NodeTermIndex],
                     tuple_values[step.InputTupleIndex],

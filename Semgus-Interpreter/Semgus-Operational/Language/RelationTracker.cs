@@ -1,14 +1,17 @@
 ﻿using Semgus.Model;
 using Semgus.Model.Smt.Terms;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using static Semgus.Model.SemgusChc;
 
 namespace Semgus {
     public class RelationTracker {
         private readonly IReadOnlyDictionary<string, RelationInfo> _relationMap;
+        private readonly IReadOnlyDictionary<string, string> _termToRelationKeyMap;
 
         public RelationTracker(IEnumerable<SemgusChc> chcs) {
-            var d = new Dictionary<string, RelationInfo>();
+            var main = new Dictionary<string, RelationInfo>();
+            var keyMap = new Dictionary<string, string>();
 
             RelationSlotLabel infer_label(SemgusChc chc, SmtVariable argVar) {
                 if (argVar.Sort is SemgusTermType) return RelationSlotLabel.Term;
@@ -19,7 +22,7 @@ namespace Semgus {
 
             foreach (var chc in chcs) {
                 var head = chc.Head;
-                var key = head.Relation.Name.AsString();
+                var relKey = head.Relation.Name.AsString();
 
                 int n = head.Arguments.Count;
                 if (head.Rank.Arity != n) throw new InvalidDataException();
@@ -33,17 +36,30 @@ namespace Semgus {
                     slots[i] = new RelationSlotInfo(Sort: arg.Sort, TopLevelVarName:arg.Name.AsString(), Label: infer_label(chc, arg));
                 }
 
-                var relInfo = new RelationInfo(key, slots);
+                var relInfo = new RelationInfo(relKey, slots);
 
-                if(d.TryGetValue(key,out var preexisting)) {
-                    if (!preexisting.Equals(relInfo)) throw new InvalidDataException($"Multiple conflicting definitions for semantic relation {key}");
-                } else {
-                    d.Add(key, relInfo);
+                {
+                    if (main.TryGetValue(relKey, out var preexisting)) {
+                        if (!preexisting.Equals(relInfo)) throw new InvalidDataException($"Multiple conflicting definitions for semantic relation {relKey}");
+                    } else {
+                        main.Add(relKey, relInfo);
+                    }
+                }
+                {
+                    var ttkey = chc.Binder.ParentType.Name.AsString();
+                    if (!keyMap.TryAdd(ttkey,relKey)) {
+                        Debug.Assert(keyMap[ttkey] == relKey);
+                    }
                 }
             }
 
-            _relationMap = d;
+            _relationMap = main;
+            _termToRelationKeyMap = keyMap;
         }
+
+        public RelationInfo GetRelation(SemgusTermType termType) => _relationMap[_termToRelationKeyMap[termType.Name.AsString()]];
+        public RelationInfo GetRelation(string termTypeKey) => _relationMap[_termToRelationKeyMap[termTypeKey]];
+        
 
         public bool TryMatch(SemanticRelation rel, [NotNullWhen(true)]out RelationInfo? info) {
             return _relationMap.TryGetValue(rel.Relation.Name.AsString(), out info);

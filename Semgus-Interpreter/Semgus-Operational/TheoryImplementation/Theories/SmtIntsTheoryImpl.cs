@@ -5,6 +5,8 @@ using IntegerValue = System.Int64;
 
 namespace Semgus.Operational {
     public class SmtIntsTheoryImpl : TemplateBasedTheoryImpl {
+        public static readonly Type IntegerType = typeof(IntegerValue);
+
         private static bool AllSortsMatch(SmtFunctionRank rank, SmtSortIdentifier return_sort_id) => rank.ReturnSort.Name == return_sort_id && rank.ArgumentSorts.All(sort => sort.Name == return_sort_id);
         private static bool IsIntCmp(SmtFunctionRank rank) => rank.Arity == 2 && rank.ReturnSort.Name == SmtCommonIdentifiers.BoolSortId && rank.ArgumentSorts.All(sort => sort.Name == SmtCommonIdentifiers.IntSortId);
 

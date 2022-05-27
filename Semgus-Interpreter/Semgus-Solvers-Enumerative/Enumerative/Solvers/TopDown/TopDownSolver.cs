@@ -43,6 +43,8 @@ namespace Semgus.Solvers.Enumerative {
 
         public ConfigParameters Config { get; }
 
+        public IReduction? TempRedTwo { get; set; }
+
         private readonly InterpreterHost _interpreter;
 
         public TopDownSolver(ConfigParameters config) {
@@ -64,6 +66,8 @@ namespace Semgus.Solvers.Enumerative {
 
             using var disposable = new CompositeDisposable();
             var reductions = new List<IReduction>();
+
+            if (TempRedTwo is not null) reductions.Add(TempRedTwo);
 
             if (Config.Reductions.Contains(ReductionMethod.Rewrite)) {
                 var egg = new EggReduction(Config.RewriteRules) { Logger = Logger };

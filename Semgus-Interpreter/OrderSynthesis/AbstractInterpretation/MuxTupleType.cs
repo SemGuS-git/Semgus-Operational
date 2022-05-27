@@ -9,8 +9,7 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
     internal class MuxTupleType {
 
         public int Size { get; }
-
-        public string PrintFriendlyName { get; set; }
+        public IReadOnlyList<Type> ElementTypes { get; }
 
         private readonly IExpression _compare;
         private readonly StructNew _join;
@@ -31,12 +30,21 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
         private MuxTupleType(LatticeDefs defs) {
             (var type, var compare, var top, var bot, var join, var meet) = defs;
             Size = type.Elements.Count;
+
+            ElementTypes = type.Elements.Select(e => DotNetTypeOf(e.TypeId)).ToList();
+
             _interpreter = new(type.Elements);
             _compare = TakeSingleExpr(compare);
             _top = (StructNew)TakeSingleExpr(top);
             _bot = (StructNew)TakeSingleExpr(bot);
             _join = (StructNew)TakeSingleExpr(join);
             _meet = (StructNew)TakeSingleExpr(meet);
+        }
+
+        static Type DotNetTypeOf(Identifier id) {
+            if (id == BitType.Id) return typeof(bool);
+            if (id == IntType.Id) return SmtIntsTheoryImpl.IntegerType;
+            throw new NotSupportedException();
         }
 
         private void InitExtrema() {
@@ -63,7 +71,7 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
         public MuxTuple Meet(MuxTuple a, MuxTuple b) => _interpreter.EvalStruct(this, _meet, a, b);
 
-        public bool Compare(MuxTuple a, MuxTuple b) => _interpreter.Eval(_compare, a, b);
+        public bool Compare(MuxTuple a, MuxTuple b) => Convert.ToBoolean(_interpreter.Eval(_compare, a, b));
 
 
         class MicroInterpreter {
@@ -78,12 +86,12 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
 
             public dynamic Eval(IExpression expr, MuxTuple a, MuxTuple b) => expr switch {
-                Literal lit => lit.Value,
+                Literal lit => Convert.ChangeType(lit.Value,SmtIntsTheoryImpl.IntegerType), // This also consumes bit literals; we'll cast those later as appropriate
                 PropertyAccess pa => Extract(pa, a, b),
-                Ternary tern => Eval(tern.Cond, a, b) ? Eval(tern.ValIf, a, b) : Eval(tern.ValElse, a, b),
+                Ternary tern => Convert.ToBoolean(Eval(tern.Cond, a, b)) ? Eval(tern.ValIf, a, b) : Eval(tern.ValElse, a, b),
                 InfixOperation infix => DoInfix(infix, a, b),
                 UnaryOperation unary => unary.Op switch {
-                    UnaryOp.Not => !Eval(unary.Operand, a, b),
+                    UnaryOp.Not => ! Convert.ToBoolean(Eval(unary.Operand, a, b)),
                     UnaryOp.Minus => -Eval(unary.Operand, a, b),
                     _ => throw new ArgumentOutOfRangeException(),
                 },
@@ -99,8 +107,8 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
                         Op.Plus => first + Eval(infix.Operands[i], a, b),
                         Op.Minus => first - Eval(infix.Operands[i], a, b),
                         Op.Times => first * Eval(infix.Operands[i], a, b),
-                        Op.Or => first || Eval(infix.Operands[i], a, b),
-                        Op.And => first && Eval(infix.Operands[i], a, b),
+                        Op.Or => Convert.ToBoolean(first) || Convert.ToBoolean(Eval(infix.Operands[i], a, b)),
+                        Op.And => Convert.ToBoolean(first) && Convert.ToBoolean(Eval(infix.Operands[i], a, b)),
                         Op.Lt => first < Eval(infix.Operands[i], a, b),
                         Op.Leq => first <= Eval(infix.Operands[i], a, b),
                         Op.Gt => first > Eval(infix.Operands[i], a, b),
@@ -118,10 +126,12 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             };
 
             public MuxTuple EvalStruct(MuxTupleType outType, StructNew expr, MuxTuple a, MuxTuple b) {
-                object[] vals = new object[outType.Size];
+                dynamic[] vals = new dynamic[outType.Size];
 
-                foreach (var arg in expr.Args) {
-                    vals[_indexMap[((VariableRef)arg.Subject).TargetId]] = Eval(arg.Value, a, b);
+                for (int i = 0; i < expr.Args.Count; i++) {
+                    Assignment? arg = expr.Args[i];
+                    var value = Convert.ChangeType(Eval(arg.Value, a, b), outType.ElementTypes[i]);
+                    vals[_indexMap[((VariableRef)arg.Subject).TargetId]] = value;
                 }
                 return new(outType, vals);
             }

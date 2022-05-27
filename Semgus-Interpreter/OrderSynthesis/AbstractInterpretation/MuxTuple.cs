@@ -2,17 +2,19 @@
     internal class MuxTuple {
 
         public MuxTupleType TupleType { get; }
-        public object[] Values { get; }
+        public dynamic[] Values { get; }
 
-        public MuxTuple(MuxTupleType tupleType, object[] result) {
+        public MuxTuple(MuxTupleType tupleType, dynamic[] result) {
             this.TupleType = tupleType;
             this.Values = result;
         }
 
-        public object this[int i] {
+        public dynamic this[int i] {
             get { return Values[i]; }
             set { Values[i] = value; }
         }
+
+        public override string ToString() => $"({string.Join(", ", Values)})";
     }
 
 

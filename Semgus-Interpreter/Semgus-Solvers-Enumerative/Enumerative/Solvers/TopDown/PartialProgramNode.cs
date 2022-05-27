@@ -9,7 +9,7 @@ namespace Semgus.Solvers.Enumerative {
         public ProductionRuleInterpreter ProductionRule { get; }
         
 
-        public IReadOnlyList<IDSLSyntaxNode> AddressableTerms => throw new InvalidOperationException();
+        public IReadOnlyList<IDSLSyntaxNode> AddressableTerms { get; }
         public IEnumerable<IDSLSyntaxNode> ChildNodes => _childNodes;
 
         public int Size { get; init; }
@@ -43,6 +43,12 @@ namespace Semgus.Solvers.Enumerative {
             ProductionRule = interpreter;
             _childNodes = childNodes;
             _index = index;
+
+            var termList = new List<IDSLSyntaxNode>() { this };
+            if (childNodes is not null) termList.AddRange(childNodes);
+            AddressableTerms = termList;
+
+
 
             int s = 0;//, h = 0;
             for (int i = 0; i < childNodes.Length; i++) {

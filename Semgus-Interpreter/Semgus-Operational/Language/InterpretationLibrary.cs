@@ -15,12 +15,19 @@ namespace Semgus.Operational {
         public ITheoryImplementation Theory { get; }
         public RelationTracker SemanticRelations { get; }
         public IReadOnlyList<ProductionRuleInterpreter> Productions { get; }
+        public IReadOnlyList<SemgusTermType> TermTypes { get; }
 
         public InterpretationLibrary(ITheoryImplementation theory, RelationTracker relations, IReadOnlyList<ProductionRuleInterpreter> productions) {
             Theory = theory;
             SemanticRelations = relations;
             Productions = productions;
             _signatureMap = productions.ToDictionary(prod => ToSyntaxKey(prod.TermType,prod.SyntaxConstructor));
+
+            Dictionary<string, SemgusTermType> temp = new();
+            foreach(var prod in productions) {
+                temp.TryAdd(prod.TermType.Name.AsString(), prod.TermType);
+            }
+            TermTypes = new List<SemgusTermType>(temp.Values);
         }
 
         public bool TryFind(SemgusTermType termType, SemgusTermType.Constructor constructor, [NotNullWhen(true)] out ProductionRuleInterpreter? prod) => _signatureMap.TryGetValue(ToSyntaxKey(termType, constructor), out prod);

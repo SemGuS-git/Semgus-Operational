@@ -1,4 +1,6 @@
-﻿namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+﻿using Semgus.MiniParser;
+
+namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
     internal class ExpressionScope {
         public IEnumerator<IExpression> RawExpressions { get; }
         private ISyntaxNode Source { get; }
@@ -35,16 +37,19 @@
                     break;
                 case PropertyAccess _prop:
                     frame.ReceiveExpression(FlattenedTerms[0] switch {
+                        // The accessee is not declared.
                         // e.g. global_variable.x
-                        VariableRef variable
-                            => stack.Resolve(new($"{variable.TargetId}.{_prop.Key}")),
+                        // e.g. input_variable.x (because input props are free variables)
+                        VariableRef variable => HandlePropOfUndeclared(stack, _prop, variable),
 
-                        // e.g. input_variable.x
+                        // Accessee is a struct variable of the local scope.
+                        // e.g. local_variable.x
                         StructValuePlaceholder placeholder
-                            => stack.TryGetAssignedValue(new($"{placeholder.Id}.{_prop.Key}"), out var overwrite)
+                            => stack.TryGetAssignedValue(ToFlatId(placeholder.Id, _prop.Key), out var overwrite)
                             ? overwrite
                             : placeholder.Source.TryGetPropValue(_prop.Key, out var value) ? value : throw new KeyNotFoundException(),
 
+                        // Accessee is a struct that is defined in an inner expression.
                         // e.g. (new Pair(5,3)).x
                         StructNew anonymous_struct_value
                             => anonymous_struct_value.TryGetPropValue(_prop.Key, out var value) ? value : throw new KeyNotFoundException(),
@@ -66,11 +71,23 @@
                     frame.Declare(vd.Variable.Id, FlattenedTerms[0]);
                     break;
                 case Assignment asn:
-                    if (asn.Subject is not VariableRef flat) throw new ArgumentException("All assignment targets must be flattened during symbolic evaluation");
-                    frame.Assign(flat.TargetId, FlattenedTerms[0]);
+                    if (asn.Subject is VariableRef flat) {
+                        frame.Assign(flat.TargetId, FlattenedTerms[0]);
+                    } else if (asn.Subject is PropertyAccess uninterpreted_access && uninterpreted_access.Expr is VariableRef target) {
+                        frame.Assign(ToFlatId(target.TargetId, uninterpreted_access.Key), FlattenedTerms[0]);
+                    } else {
+                        throw new ArgumentException("Invalid assignment target");
+                    }
                     break;
             }
         }
+
+        private static IExpression HandlePropOfUndeclared(ScopeStack stack, PropertyAccess access, VariableRef variable) {
+            if (stack.TryGetAssignedValue(ToFlatId(variable.TargetId, access.Key), out var value)) return value;
+            return access; // If this property hasn't been written anywhere, return an uninterpreted property reference
+        }
+
+        private static Identifier ToFlatId(Identifier target, Identifier key) => new($"{target}.{key}");
 
         public static ExpressionScope From(IStatement statement) => statement switch {
             IfStatement _if => (new(_if, _if.Condition)),

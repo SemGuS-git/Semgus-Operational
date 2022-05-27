@@ -157,7 +157,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
         }
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
-        public static async Task<Output> ExecuteLoop(FlexPath dir, PipelineState state) {
+        public static async Task<Output> ExecuteLoop(FlexPath dir, PipelineState state, bool reuse_prev = false) {
             var comparisons = state.Comparisons ?? throw new NullReferenceException();
             IReadOnlyList<FunctionDefinition> prev_compare = Array.Empty<FunctionDefinition>();
 
@@ -186,40 +186,48 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 var dir_refinement = dir.Append($"iter_{i}/");
 
-                (var result, var stopFlag) = await refinement_step.Execute(dir_refinement); // May throw
+                (var result, var stopFlag) = await refinement_step.Execute(dir_refinement, reuse_prev); // May throw
                 if (stopFlag) break;
                 comparisons = result.Comparisons;
             }
 
             return new(prev_compare);
         }
-        public async Task<(Output output, bool stopFlag)> Execute(FlexPath dir) {
+        public async Task<(Output output, bool stopFlag)> Execute(FlexPath dir, bool reuse_prev = false) {
             Directory.CreateDirectory(dir.PathWin);
 
             var file_in = dir.Append("input.sk");
             var file_out = dir.Append("result.sk");
             var file_holes = dir.Append("result.holes.xml");
 
-            System.Console.WriteLine($"--- [Refinement {Iter}] Writing input file at {file_in} ---");
+            if (reuse_prev) {
+                System.Console.WriteLine($"--- [Refinement {Iter}] Reusing previous result ---");
+                if(!File.Exists(file_out.PathWin)) {
+                    Console.WriteLine($"--- [Refinement {Iter}] No result.sk; done with refinement ---");
+                    return (new(Array.Empty<FunctionDefinition>()), true);
+                }
 
-            using (StreamWriter sw = new(file_in.PathWin)) {
-                LineReceiver receiver = new(sw);
-                foreach (var a in this.GetFile()) {
-                    a.WriteInto(receiver);
+            } else { 
+                System.Console.WriteLine($"--- [Refinement {Iter}] Writing input file at {file_in} ---");
+
+                using (StreamWriter sw = new(file_in.PathWin)) {
+                    LineReceiver receiver = new(sw);
+                    foreach (var a in this.GetFile()) {
+                        a.WriteInto(receiver);
+                    }
+                }
+
+                System.Console.WriteLine($"--- [Refinement {Iter}] Invoking Sketch on {file_in} ---");
+
+                var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
+
+                if (step2_sketch_result) {
+                    Console.WriteLine($"--- [Refinement {Iter}] Sketch succeeded ---");
+                } else {
+                    Console.WriteLine($"--- [Refinement {Iter}] Sketch rejected; done with refinement ---");
+                    return (new(Array.Empty<FunctionDefinition>()), true);
                 }
             }
-
-            System.Console.WriteLine($"--- [Refinement {Iter}] Invoking Sketch on {file_in} ---");
-
-            var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-            if (step2_sketch_result) {
-                Console.WriteLine($"--- [Refinement {Iter}] Sketch succeeded ---");
-            } else {
-                Console.WriteLine($"--- [Refinement {Iter}] Sketch rejected; done with refinement ---");
-                return (new(Array.Empty<FunctionDefinition>()), true);
-            }
-
             Console.WriteLine($"--- [Refinement {Iter}] Reading compare functions ---");
 
             var compare_ids = this.Structs.Select(s => s.CompareId).ToList();
@@ -229,8 +237,14 @@ namespace Semgus.OrderSynthesis.Subproblems {
             try {
                 extracted_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);
             } catch (Exception) {
-                Console.WriteLine($"--- [Refinement {Iter}] Failed to extract all comparison functions; halting ---");
-                throw;
+                if (reuse_prev) {
+                    Console.WriteLine($"--- [Refinement {Iter}] Failed to extract all comparison functions; done with refinement ---");
+                    return (new(Array.Empty<FunctionDefinition>()), true);
+
+                } else {
+                    Console.WriteLine($"--- [Refinement {Iter}] Failed to extract all comparison functions; halting ---");
+                    throw;
+                }
             }
 
             Console.WriteLine($"--- [Refinement {Iter}] Transforming compare functions ---");
