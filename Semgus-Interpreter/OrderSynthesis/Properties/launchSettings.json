@@ -2,7 +2,7 @@
   "profiles": {
     "OrderSynthesis": {
       "commandName": "Project",
-      "commandLineArgs": "../../Semgus-Parser/Examples/max3-exp.sl",
+      "commandLineArgs": "../../../Semgus-Benchmarks/regex-new/regex4.sl",
       "workingDirectory": "$(ProjectDir)"
     }
   }

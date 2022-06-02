@@ -195,6 +195,8 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
             List<AbstractTermEvalStep> abstract_evals = new();
 
+            List<ISmtLibExpression> assertions = new();
+
             Dictionary<int, ISmtLibExpression> main_output_expressions = new();
             HashSet<int> tuples_in_concrete_transformer = new();
 
@@ -204,7 +206,9 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
             foreach (var step in sem.Steps) {
                 switch (step) {
-                    case ConditionalAssertion: throw new NotImplementedException();
+                    case ConditionalAssertion condat: 
+                        assertions.Add(condat.Expression);
+                        break;
                     case TermEvaluation eval: {
 
                             // Scan input variables

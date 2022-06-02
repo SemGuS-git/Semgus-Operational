@@ -95,6 +95,7 @@ namespace Semgus.Solvers.Enumerative {
                             distinctTerms.Add(expr);
                             break;
                         case TermReceiverCode.Prune:
+                            Logger?.LogTrace("Prune {expr}", expr);
                             termsDiscardedAtCost++;
                             break;
                         default: throw new ArgumentOutOfRangeException();

@@ -96,7 +96,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Debug.Assert(observed_struct_types.Count == struct_type_dict.Count);
 
-            return new(struct_type_dict.Values.ToList(), queryTransformers, constantTransformers, fnIds);
+            return new(struct_type_dict.Values.ToList(), queryTransformers, Array.Empty<FunctionDefinition>(), constantTransformers, fnIds);
         }
     }
 }

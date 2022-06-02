@@ -31,14 +31,6 @@ namespace Semgus.OrderSynthesis {
 
 
             Console.WriteLine("--- Abs sem constructed ---");
-            var logCfg = new LoggerConfiguration()
-                .Enrich.FromLogContext()
-                .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
-                .WriteTo.Console(); 
-                //.WriteTo.File(batchLabel + ".log");
-
-            using var innerLogger = logCfg.CreateLogger();
-            var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
 
 
             var cfg = new ConfigParameters {
@@ -47,6 +39,15 @@ namespace Semgus.OrderSynthesis {
             };
 
             {
+                var logCfg = new LoggerConfiguration()
+                    .Enrich.FromLogContext()
+                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Verbose)
+                    .WriteTo.Console()
+                    .WriteTo.File("demo.topdown.log");
+
+                using var innerLogger = logCfg.CreateLogger();
+                var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
+
                 var solver = new TopDownSolver(cfg) { Logger = logger };
                 solver.TempRedTwo = new AbstractReduction(items.Constraint.Examples,abs_sem);
 
@@ -54,16 +55,26 @@ namespace Semgus.OrderSynthesis {
                 sw.Start();
                 var synth_res = solver.Run(items.Grammar, items.Constraint);
                 sw.Stop();
-                logger.LogInformation("Solver with abstract reduction took {0}", sw.Elapsed);
+                logger.LogInformation("Top-down solver with abstract reduction took {0}", sw.Elapsed);
 
             }
             {
-                var solver = new TopDownSolver(cfg) { Logger = logger };
+                var logCfg = new LoggerConfiguration()
+                    .Enrich.FromLogContext()
+                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Verbose)
+                    .WriteTo.Console()
+                    .WriteTo.File("demo.bottomup.log");
+
+                using var innerLogger = logCfg.CreateLogger();
+                var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
+
+
+                var solver = new BottomUpSolver(cfg) { Logger = logger };
                 var sw = new Stopwatch();
                 sw.Start();
                 var synth_res = solver.Run(items.Grammar, items.Constraint);
                 sw.Stop();
-                logger.LogInformation("Solver without abstract reduction took {0}", sw.Elapsed);
+                logger.LogInformation("Bottom-up solver with OE reduction took {0}", sw.Elapsed);
             }
 
             Console.WriteLine("--- Did synth ---");

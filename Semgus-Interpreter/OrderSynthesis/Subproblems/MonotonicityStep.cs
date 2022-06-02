@@ -10,19 +10,22 @@ namespace Semgus.OrderSynthesis.Subproblems {
     internal class MonotonicityStep {
         public IReadOnlyList<StructType> Structs { get; }
         public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
-        public IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
+        private IReadOnlyList<FunctionDefinition> MaybeMonotoneFunctions { get; }
+        private IReadOnlyList<FunctionDefinition> OtherFunctions { get; }
         private IReadOnlyList<MonotoneLabeling> ConstantTransformers { get; }
         public IReadOnlyList<Identifier> OrderedFunctionIds { get; }
 
         public MonotonicityStep(
             IReadOnlyList<StructType> structs,
             IReadOnlyList<FunctionDefinition> maybeMonotoneFunctions,
+            IReadOnlyList<FunctionDefinition> otherFunctions,
             IReadOnlyList<MonotoneLabeling> constantTransformers,
             IReadOnlyList<Identifier> orderedFunctionIds
         ) {
             Structs = structs;
             StructTypeMap = structs.ToDictionary(s => s.Id);
             MaybeMonotoneFunctions = maybeMonotoneFunctions;
+            OtherFunctions = otherFunctions;
             ConstantTransformers = constantTransformers;
             OrderedFunctionIds = orderedFunctionIds;
         }
@@ -42,6 +45,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
             yield return CompareAtomGenerators.GetBitAtom();
             yield return CompareAtomGenerators.GetIntAtom();
 
+            foreach (var fn in OtherFunctions) {
+                yield return fn;
+            }
             foreach (var fn in MaybeMonotoneFunctions) {
                 yield return fn;
             }

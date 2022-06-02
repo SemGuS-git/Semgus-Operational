@@ -2,7 +2,7 @@
   "profiles": {
     "CommandLineInterface": {
       "commandName": "Project",
-      "commandLineArgs": "solve ../Semgus-Parser/Examples/mul-by-while.sl -l Information",
+      "commandLineArgs": "solve ../Semgus-Parser/Examples/max2-exp.sl -l Information",
       "workingDirectory": "$(SolutionDir)"
     }
   }
