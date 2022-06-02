@@ -11,7 +11,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             static Assignment AdjustedAssign(Variable lhs, Variable rhs)
                 => lhs.Assign(lhs.TypeId == IntType.Id ? Op.Minus.Of(rhs.Ref(), IntOffset) : rhs.Ref());
 
-            static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(StructType st, IReadOnlyList<Variable> input_structs) {
+            public static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(StructType st, IReadOnlyList<Variable> input_structs) {
                 List<FunctionArg> input_args = new();
                 List<IStatement> input_assembly_statements = new();
 

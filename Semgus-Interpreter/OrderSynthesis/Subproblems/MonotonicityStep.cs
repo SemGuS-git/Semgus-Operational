@@ -60,7 +60,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public FunctionDefinition GetMain() {
-            var clasps = Clasp.GetAll(StructTypeMap, MaybeMonotoneFunctions.Select(f => f.Signature));
+            var clasps = Clasp.GetAll(Structs, StructTypeMap, MaybeMonotoneFunctions.Select(f => f.Signature));
 
             List<IStatement> body = new();
 

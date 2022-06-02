@@ -9,12 +9,12 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal record LatticeDefs(StructType type, FunctionDefinition compare, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join, FunctionDefinition meet) {
+    internal record LatticeDefs(StructType type, FunctionDefinition compare, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join_incomparable, FunctionDefinition meet_incomparable) {
         internal IEnumerable<FunctionDefinition> GetEach() {
             yield return top;
             yield return bot;
-            yield return join;
-            yield return meet;
+            yield return join_incomparable;
+            yield return meet_incomparable;
         }
     }
 

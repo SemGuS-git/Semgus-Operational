@@ -12,8 +12,8 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
         public IReadOnlyList<Type> ElementTypes { get; }
 
         private readonly IExpression _compare;
-        private readonly StructNew _join;
-        private readonly StructNew _meet;
+        private readonly StructNew _join_incomparable;
+        private readonly StructNew _meet_incomparable;
         private readonly StructNew _top;
         private readonly StructNew _bot;
 
@@ -28,7 +28,7 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
         }
 
         private MuxTupleType(LatticeDefs defs) {
-            (var type, var compare, var top, var bot, var join, var meet) = defs;
+            (var type, var compare, var top, var bot, var join_incomparable, var meet_incomparable) = defs;
             Size = type.Elements.Count;
 
             ElementTypes = type.Elements.Select(e => DotNetTypeOf(e.TypeId)).ToList();
@@ -37,8 +37,8 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             _compare = TakeSingleExpr(compare);
             _top = (StructNew)TakeSingleExpr(top);
             _bot = (StructNew)TakeSingleExpr(bot);
-            _join = (StructNew)TakeSingleExpr(join);
-            _meet = (StructNew)TakeSingleExpr(meet);
+            _join_incomparable = (StructNew)TakeSingleExpr(join_incomparable);
+            _meet_incomparable = (StructNew)TakeSingleExpr(meet_incomparable);
         }
 
         static Type DotNetTypeOf(Identifier id) {
@@ -65,11 +65,20 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
         }
 
 
-        public MuxTuple Join(MuxTuple a, MuxTuple b) => _interpreter.EvalStruct(this, _join, a, b);
+        public MuxTuple Join(MuxTuple a, MuxTuple b) {
+            if (Compare(a, b)) return b;
+            if (Compare(b, a)) return a;
+            return _interpreter.EvalStruct(this, _join_incomparable, a, b);
+        }
+
+        public MuxTuple Meet(MuxTuple a, MuxTuple b) {
+            if (Compare(a, b)) return a;
+            if (Compare(b, a)) return b;
+            return _interpreter.EvalStruct(this, _meet_incomparable, a, b);
+        }
 
         public bool StrictCompare(MuxTuple a, MuxTuple b) => Compare(a, b) && !a.Values.SequenceEqual(b.Values);
 
-        public MuxTuple Meet(MuxTuple a, MuxTuple b) => _interpreter.EvalStruct(this, _meet, a, b);
 
         public bool Compare(MuxTuple a, MuxTuple b) => Convert.ToBoolean(_interpreter.Eval(_compare, a, b));
 

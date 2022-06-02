@@ -43,7 +43,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 StructType? st = Structs[i];
                 yield return st.GetEqualityFunction();
                 yield return PrevComparisons[i];
-                yield return st.GetCompareRefinementGenerator(PrevComparisons[i].Id, Budgets[i]);
+                yield return st.GetCompareReductionGenerator(Budgets[i]);
+                //yield return st.GetCompareRefinementGenerator(PrevComparisons[i].Id, Budgets[i]);
                 yield return st.GetDisjunctGenerator();
             }
 
@@ -58,7 +59,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         public FunctionDefinition GetMain() {
-            var clasps = Clasp.GetAll(StructTypeMap, MonotoneFunctions.Select(f => f.Function.Signature));
+            var clasps = Clasp.GetAll(Structs, StructTypeMap, MonotoneFunctions.Select(f => f.Function.Signature));
 
             List<IStatement> body = new();
 
@@ -66,11 +67,26 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.AddRange(input_assembly_statements);
 
+            // Superset prev relation
+            foreach (var (clasp, prev) in clasps.Zip(PrevComparisons)) {
+                body.Add(new AssertStatement(
+                    prev.Call(clasp.Indexed[0].Ref(), clasp.Alternate.Ref()).Implies(
+                        clasp.Type.CompareId.Call(clasp.Indexed[0].Ref(), clasp.Alternate.Ref())
+                    )
+                    //Op.Eq.Of(
+                    //    clasp.Type.CompareId.Call(clasp.A.Ref(), clasp.B.Ref()),
+                    //    prev.Call(clasp.A.Ref(), clasp.B.Ref())
+                    //    )
+                 ));
+            }
+
+            // Maintain partial eq properties
             body.Add(new Annotation("Check partial equality properties", 2));
             foreach (var c in clasps) {
                 body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0].Sig(), c.Indexed[1].Sig(), c.Indexed[2].Sig()));
             }
 
+            // Maintain monotonicity
             body.Add(new Annotation("Monotonicity", 2));
 
             var claspMap = clasps.ToDictionary(v => v.Type.Id);
@@ -78,8 +94,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 body.AddRange(GetMonoAssertions(claspMap, fn));
             }
 
+            // Expand at least one relation
             List<IExpression> expFlagRefs = new();
-
             for (int i = 0; i < Structs.Count; i++) {
                 var type = Structs[i];
                 Variable flag = new("exp_" + type.Name, BitType.Instance);
@@ -89,6 +105,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             body.Add(new AssertStatement(Op.Or.Of(expFlagRefs)));
 
+            // Minimize budget
             body.Add(new MinimizeStatement(Op.Plus.Of(Budgets.Select(b => b.Ref()).ToList())));
 
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
