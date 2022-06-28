@@ -12,7 +12,7 @@ namespace Semgus.Util {
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TCollection"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    public class DictOfCollection<TKey, TCollection, TValue> : IReadOnlyDictionary<TKey,TCollection> where TCollection : ICollection<TValue> {
+    public class DictOfCollection<TKey, TCollection, TValue> : IReadOnlyDictionary<TKey,TCollection> where TCollection : ICollection<TValue>, new() {
         private readonly AutoDict<TKey, TCollection> _dict;
 
         public IEnumerable<TKey> Keys => _dict.Keys;
@@ -31,6 +31,7 @@ namespace Semgus.Util {
         }
 
         public DictOfCollection() {
+            this._dict = new AutoDict<TKey, TCollection>(_ => new TCollection());
         }
 
         public IEnumerable<(TKey, TValue)> EnumerateKeyElementTuples() {

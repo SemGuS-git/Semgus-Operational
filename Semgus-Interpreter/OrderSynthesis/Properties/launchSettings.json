@@ -2,7 +2,7 @@
   "profiles": {
     "OrderSynthesis": {
       "commandName": "Project",
-      "commandLineArgs": "../../../Semgus-Benchmarks/regex-new/regex4.sl",
+      "commandLineArgs": "../../ord-synth-bench/",
       "workingDirectory": "$(ProjectDir)"
     }
   }

@@ -20,7 +20,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, GetAtomFunctionId(BitType.Id), var_a, var_b),
                 new VariableDeclaration(var_t, new Hole()),
                 var_t.IfEq(Lit0, Return(var_a.Implies(var_b))),
-                var_t.IfEq(Lit1, Return(var_a.Implies(var_b))),
+                var_t.IfEq(Lit1, Return(var_b.Implies(var_a))),
                 new ReturnStatement(Lit1)
             );
         }

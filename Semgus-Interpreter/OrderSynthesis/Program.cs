@@ -17,16 +17,50 @@ namespace Semgus.OrderSynthesis {
     public class Program {
 
         static async Task Main(string[] args) {
-            var file = args[0];
+            var head = args[0];
+
+            var nex = new List<string>();
+
+            foreach (var target in new[] {
+              //  "impv-demo.sl",
+               //"max2-exp.sl",
+               "max3-exp.sl",
+                //"regex4-simple.sl",
+                //"regex4-either-pair.sl",
+               // "polynomial.sl",
+                //"regex6-padded-cycle.sl",
+                //"regex8-aa.sl"
+            }) {
+                var file = head + target;
+                Debug.Assert(File.Exists(file), "Missing input file {0}", file);
+                nex.Add(file);
+            }
+            
+            foreach(var file in nex) {
+                try {
+                    await Main(file);
+                } catch(Exception e) {
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine($"Hit exception during work on {file}");
+                    Console.WriteLine(e.ToString());
+                    Console.WriteLine();
+                    Console.WriteLine();
+                }
+            }
+        }
+
+        static async Task Main(string file) {
 
             Debug.Assert(File.Exists(file), "Missing input file {0}", file);
 
-            FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{Path.GetFileName(file)}/");
+            string fname = Path.GetFileName(file);
+            FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{fname}/");
 
             var items = ParseUtil.TypicalItems.Acquire(file); // May throw
             var preinit = AbstractPreInit.From(items.Grammar, items.Library); // May throw
 
-            var result = await RunPipeline(dir, preinit, false);
+            var result = await RunPipeline(dir, preinit, true);
             var abs_sem = preinit.Hydrate(result.Lattices!, result.LabeledTransformers!);
 
 
@@ -41,9 +75,9 @@ namespace Semgus.OrderSynthesis {
             {
                 var logCfg = new LoggerConfiguration()
                     .Enrich.FromLogContext()
-                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Verbose)
+                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
                     .WriteTo.Console()
-                    .WriteTo.File("demo.topdown.log");
+                    .WriteTo.File($"demo.{fname}.log");
 
                 using var innerLogger = logCfg.CreateLogger();
                 var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
@@ -58,24 +92,24 @@ namespace Semgus.OrderSynthesis {
                 logger.LogInformation("Top-down solver with abstract reduction took {0}", sw.Elapsed);
 
             }
-            {
-                var logCfg = new LoggerConfiguration()
-                    .Enrich.FromLogContext()
-                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Verbose)
-                    .WriteTo.Console()
-                    .WriteTo.File("demo.bottomup.log");
+            //{
+            //    var logCfg = new LoggerConfiguration()
+            //        .Enrich.FromLogContext()
+            //        .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
+            //        .WriteTo.Console()
+            //        .WriteTo.File("demo.bottomup.log");
 
-                using var innerLogger = logCfg.CreateLogger();
-                var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
+            //    using var innerLogger = logCfg.CreateLogger();
+            //    var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
 
 
-                var solver = new BottomUpSolver(cfg) { Logger = logger };
-                var sw = new Stopwatch();
-                sw.Start();
-                var synth_res = solver.Run(items.Grammar, items.Constraint);
-                sw.Stop();
-                logger.LogInformation("Bottom-up solver with OE reduction took {0}", sw.Elapsed);
-            }
+            //    var solver = new BottomUpSolver(cfg) { Logger = logger };
+            //    var sw = new Stopwatch();
+            //    sw.Start();
+            //    var synth_res = solver.Run(items.Grammar, items.Constraint);
+            //    sw.Stop();
+            //    logger.LogInformation("Bottom-up solver with OE reduction took {0}", sw.Elapsed);
+            //}
 
             Console.WriteLine("--- Did synth ---");
         }

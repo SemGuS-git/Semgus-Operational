@@ -26,7 +26,7 @@ namespace Semgus.Constraints {
             return true;
         }
 
-        public bool MatchesNT(IDSLSyntaxNode node) => node.ProductionRule.TermType == TermType;
+        public bool MatchesNT(IDSLSyntaxNode node) => node.Nonterminal == StartSymbol;
 
         //public string PrintResultSummary(InterpreterHost interpreter, IDSLSyntaxNode node) {
         //    var sb = new StringBuilder();

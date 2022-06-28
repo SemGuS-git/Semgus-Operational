@@ -1,0 +1,18 @@
+[[solver]]
+    method="top_down"
+    timeout = 300
+    [solver.params]
+        cost_function = "size"
+
+[[solver]]
+    method="bottom_up"
+    timeout = 300
+    [solver.params]
+        cost_function = "size"
+        reductions = ["observational_equivalence"]
+
+[[solver]]
+    method="bottom_up"
+    timeout = 300
+    [solver.params]
+        cost_function = "size"

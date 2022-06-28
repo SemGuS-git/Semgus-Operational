@@ -49,6 +49,9 @@ namespace Semgus.Solvers.Enumerative {
             var innerTimer = new Stopwatch();
             outerTimer.Start();
 
+            var tt_to_nt = enumerator.GetTermTypeToNtMap(); // TODO FIX
+
+
             var costLevels = new Dictionary<int, RunInfo.AtCostLevel>();
 
             RunInfo MakeOutput(StopReason outcome, IDSLSyntaxNode program = null) => new RunInfo {
@@ -115,6 +118,10 @@ namespace Semgus.Solvers.Enumerative {
 
                 foreach (var expr in distinctTerms) {
                     bank.Add(expr.Nonterminal, budget, expr);
+                    //foreach(var nt in tt_to_nt[expr.ProductionRule.TermType.Name.AsString()]) {
+                    //    bank.Add(nt, budget, expr);
+                    //}
+
                 }
                 distinctTerms.Clear();
 

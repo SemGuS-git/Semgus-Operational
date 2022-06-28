@@ -2,7 +2,7 @@
   "profiles": {
     "CommandLineInterface": {
       "commandName": "Project",
-      "commandLineArgs": "solve ../Semgus-Parser/Examples/max2-exp.sl -l Information",
+      "commandLineArgs": "solve ../ord-synth-bench/regex8-aa.sl -l Information",
       "workingDirectory": "$(SolutionDir)"
     }
   }

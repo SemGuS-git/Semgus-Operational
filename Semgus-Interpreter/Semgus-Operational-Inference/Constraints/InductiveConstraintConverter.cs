@@ -20,13 +20,12 @@ namespace Semgus.Constraints {
         // TODO: this function should be obviated by fixes to the parser
         private static NtSymbol InferStartSymbol(SemgusTermType termType, SemgusGrammar grammar) {
             var key = termType.StringName();
-            var matches = grammar.NonTerminals.Where(nt => nt.Sort.StringName() == key).ToList();
+            
+            var first_nt = grammar.NonTerminals.First();
 
-            switch(matches.Count) {
-                case 0: throw new KeyNotFoundException("Unable to infer nonterminal matching synth-fun term type");
-                case 1: return matches[0].Convert();
-                default: throw new InvalidDataException("Ambiguous nonterminal for synth-fun");
-            }
+            if (first_nt.Sort.StringName() != key) throw new InvalidDataException($"Term type of start symbol ({first_nt}) does not match term type of synth fun ({key})");
+
+            return first_nt.Convert();
         }
 
         public InductiveConstraint ProcessConstraints(IEnumerable<SmtTerm> constraintTerms) {

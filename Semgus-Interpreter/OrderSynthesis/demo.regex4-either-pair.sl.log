@@ -1,0 +1,8 @@
+2022-06-02 03:49:45.890 -05:00 [INF] Starting TopDownSolver with cost function "Size"
+2022-06-02 03:49:45.893 -05:00 [DBG] Using receiver InductiveObsEquivReceiver with reductions AbstractReduction
+2022-06-02 03:49:55.895 -05:00 [DBG] ["00:00:10.0000512"] Enumerated 348301, cost 9
+2022-06-02 03:50:05.895 -05:00 [DBG] ["00:00:20.0000460"] Enumerated 486221, cost 9
+2022-06-02 03:50:09.891 -05:00 [DBG] Found a match after 497741 terms: ($eval ($star ($or ($concat $char_1 $char_2) ($concat $char_3 $char_4))))
+2022-06-02 03:50:09.893 -05:00 [INF] TopDownSolver success (497741 t, 23.9983057s)
+2022-06-02 03:50:09.905 -05:00 [INF] Result program: ($eval ($star ($or ($concat $char_1 $char_2) ($concat $char_3 $char_4))))
+2022-06-02 03:50:09.908 -05:00 [INF] Top-down solver with abstract reduction took "00:00:24.0179572"

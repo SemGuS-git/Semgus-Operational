@@ -48,6 +48,7 @@ namespace Semgus.OrderSynthesis {
         public static async Task<bool> RunSketch(FlexPath file_sketch, FlexPath file_soln, FlexPath file_xml) {
             var receiver = new SketchStdStreamReceiver();
             await Invoke($"time sketch --fe-output-xml {file_xml.PathWsl} {file_sketch.PathWsl} > {file_soln.PathWsl}", receiver);
+            await Task.Delay(100);
             return !receiver.Rejected;
         }
 

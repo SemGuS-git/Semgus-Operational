@@ -15,6 +15,17 @@ namespace Semgus.Solvers.Enumerative {
             _expressionBank = expressionBank;
         }
 
+        // kludge
+        public IReadOnlyDictionary<string,HashSet<NtSymbol>> GetTermTypeToNtMap() {
+            var map = new DictOfCollection<string,HashSet<NtSymbol>,NtSymbol>();
+            
+            foreach(var ntp in _grammar.LeafRules.SelectMany(kvp=>kvp.Value).Concat(_grammar.BranchRules.SelectMany(kvp=>kvp.Value))) {
+                var tt = ntp.Production.TermType.Name.AsString();
+                map.SafeGetCollection(tt).Add(ntp.ParentNonterminal);
+            }
+            return map;
+        }
+
         public IEnumerable<IDSLSyntaxNode> EnumerateAtCost(int budget) {
             if (_grammar.LeafRules.TryGetValue(budget, out var leavesAtCost)) {
                 foreach (var leaf in leavesAtCost) {

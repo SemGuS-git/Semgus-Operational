@@ -1,0 +1,12 @@
+2022-06-02 02:26:10.424 -05:00 [INF] Starting TopDownSolver with cost function "Size"
+2022-06-02 02:26:10.447 -05:00 [DBG] Using receiver InductiveObsEquivReceiver with reductions AbstractReduction
+2022-06-02 02:26:10.507 -05:00 [DBG] Found a match after 1170 terms: ($ite ($< $y $x) $x $y)
+2022-06-02 02:26:10.509 -05:00 [INF] TopDownSolver success (1170 t, 0.0598982s)
+2022-06-02 02:26:10.511 -05:00 [INF] Result program: ($ite ($< $y $x) $x $y)
+2022-06-02 02:26:10.512 -05:00 [INF] Top-down solver with abstract reduction took "00:00:00.0966675"
+2022-06-14 12:28:10.917 -05:00 [INF] Starting TopDownSolver with cost function "Size"
+2022-06-14 12:28:10.976 -05:00 [DBG] Using receiver InductiveObsEquivReceiver with reductions AbstractReduction
+2022-06-14 12:28:11.037 -05:00 [DBG] Found a match after 1170 terms: ($ite ($< $y $x) $x $y)
+2022-06-14 12:28:11.041 -05:00 [INF] TopDownSolver success (1170 t, 0.0632255s)
+2022-06-14 12:28:11.042 -05:00 [INF] Result program: ($ite ($< $y $x) $x $y)
+2022-06-14 12:28:11.044 -05:00 [INF] Top-down solver with abstract reduction took "00:05:07.5404066"
