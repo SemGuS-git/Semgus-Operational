@@ -14,6 +14,10 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             _indexToEClass.Add(k, new() { key });
         }
 
+        public TValue Get(TKey key) {
+            return _values[_keyToIndex[key]];
+        }
+
         public void Merge(TKey a, TKey b) {
             var n_a = _keyToIndex[a];
             var n_b = _keyToIndex[b];

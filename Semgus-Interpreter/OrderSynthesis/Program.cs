@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Semgus.CommandLineInterface;
 using Semgus.Operational;
 using Semgus.OrderSynthesis.AbstractInterpretation;
+using Semgus.OrderSynthesis.IntervalSemantics;
 using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.Subproblems;
 using Semgus.Solvers.Enumerative;
@@ -23,8 +24,8 @@ namespace Semgus.OrderSynthesis {
 
             foreach (var target in new[] {
               //  "impv-demo.sl",
-               //"max2-exp.sl",
-               "max3-exp.sl",
+               "max2-exp.sl",
+               //"max3-exp.sl",
                 //"regex4-simple.sl",
                 //"regex4-either-pair.sl",
                // "polynomial.sl",
@@ -58,40 +59,46 @@ namespace Semgus.OrderSynthesis {
             FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{fname}/");
 
             var items = ParseUtil.TypicalItems.Acquire(file); // May throw
-            var preinit = AbstractPreInit.From(items.Grammar, items.Library); // May throw
+            var abs_sem_raw = InitialStuff.From(items.Grammar, items.Library); // May throw
 
-            var result = await RunPipeline(dir, preinit, true);
-            var abs_sem = preinit.Hydrate(result.Lattices!, result.LabeledTransformers!);
+            var (cores,lattices) = await RunPipeline(dir, abs_sem_raw, false);
+
+            // apply monotonicities to abstract sem
+            InitialStuff abs_sem = abs_sem_raw.WithMonotonicitiesFrom(cores.QueryFunctions);
 
 
-            Console.WriteLine("--- Abs sem constructed ---");
+            Console.WriteLine("--- Abs sem monotonized ---");
+
+            var json_file = dir.Append("result.json");
+
+            File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
 
 
-            var cfg = new ConfigParameters {
-                CostFunction = TermCostFunction.Size,
-                Reductions = new() { ReductionMethod.ObservationalEquivalence }
-            };
+            //var cfg = new ConfigParameters {
+            //    CostFunction = TermCostFunction.Size,
+            //    Reductions = new() { ReductionMethod.ObservationalEquivalence }
+            //};
 
-            {
-                var logCfg = new LoggerConfiguration()
-                    .Enrich.FromLogContext()
-                    .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
-                    .WriteTo.Console()
-                    .WriteTo.File($"demo.{fname}.log");
+            //{
+            //    var logCfg = new LoggerConfiguration()
+            //        .Enrich.FromLogContext()
+            //        .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
+            //        .WriteTo.Console()
+            //        .WriteTo.File($"demo.{fname}.log");
 
-                using var innerLogger = logCfg.CreateLogger();
-                var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
+            //    using var innerLogger = logCfg.CreateLogger();
+            //    var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
 
-                var solver = new TopDownSolver(cfg) { Logger = logger };
-                solver.TempRedTwo = new AbstractReduction(items.Constraint.Examples,abs_sem);
+            //    var solver = new TopDownSolver(cfg) { Logger = logger };
+            //    solver.TempRedTwo = new AbstractReduction(items.Constraint.Examples,abs_sem);
 
-                var sw = new Stopwatch();
-                sw.Start();
-                var synth_res = solver.Run(items.Grammar, items.Constraint);
-                sw.Stop();
-                logger.LogInformation("Top-down solver with abstract reduction took {0}", sw.Elapsed);
+            //    var sw = new Stopwatch();
+            //    sw.Start();
+            //    var synth_res = solver.Run(items.Grammar, items.Constraint);
+            //    sw.Stop();
+            //    logger.LogInformation("Top-down solver with abstract reduction took {0}", sw.Elapsed);
 
-            }
+            //}
             //{
             //    var logCfg = new LoggerConfiguration()
             //        .Enrich.FromLogContext()
@@ -114,7 +121,7 @@ namespace Semgus.OrderSynthesis {
             Console.WriteLine("--- Did synth ---");
         }
 
-        static async Task<PipelineState> RunPipeline(FlexPath dir, AbstractPreInit preInit, bool reuse_previous = false) {
+        static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InitialStuff abs_sem_raw, bool reuse_previous = false) {
             if (!reuse_previous) {
                 if (Directory.Exists(dir.PathWin)) {
                     Directory.Delete(dir.PathWin, true);
@@ -141,30 +148,35 @@ namespace Semgus.OrderSynthesis {
             PipelineState? state = null;
 
             try {
+                MonotonicityStep.Output rho;
                 {
-                    var step = new MonotonicityStepBuilder(preInit).Build();
+                    var step = new MonotonicityStep(abs_sem_raw);
 
-                    state = new(PipelineState.Step.Initial, step.StructTypeMap, step.Structs);
+                    //state = new(PipelineState.Step.Initial, step.StructTypeMap, step.Structs);
 
-                    var result = await step.Execute(dir.Append("step_1_mono/"), reuse_previous); // May throw
+                    rho = await step.Execute(dir.Append("step_1_mono/"), reuse_previous); // May throw
 
-                    state = state with {
-                        Reached = PipelineState.Step.Monotonicity,
-                        Comparisons = result.Comparisons,
-                        LabeledTransformers = result.LabeledTransformers
-                    };
+                    //state = state with {
+                    //    Reached = PipelineState.Step.Monotonicity,
+                    //    Comparisons = result.Comparisons,
+                    //    Monotonicities = result.QueryFunctionMono
+                    //    LabeledTransformers = result.LabeledTransformers
+                    //};
                 }
 
                 {
-                    var result = await OrderExpansionStep.ExecuteLoop(dir.Append("step_2_expand/"), state, reuse_previous); // May throw
-                    state = state with { Reached = PipelineState.Step.OrderExpansion, Comparisons = result.Comparisons };
+                    var result = await OrderExpansionStep.ExecuteLoop(dir.Append("step_2_expand/"), rho, reuse_previous); // May throw
+                    rho = rho with {  Comparisons = result.Comparisons };
+                    //state = state with { Reached = PipelineState.Step.OrderExpansion, Comparisons = result.Comparisons };
                 }
 
                 try {
 
-                    var step = new SimplificationStep(new(state.StructTypeMap, state.StructTypeList, state.Comparisons));
+                    var step = new SimplificationStep(rho);
                     var result = await step.Execute(dir.Append("step_3_simplify/"), reuse_previous);
-                    state = state with { Reached = PipelineState.Step.Simplification, Comparisons = result.Comparisons };
+                    rho = rho with { Comparisons = result.Comparisons };
+
+                    //state = state with { Reached = PipelineState.Step.Simplification, Comparisons = result.Comparisons };
 
                 } catch (Exception e) {
                     // Don't treat this as a hard stop
@@ -172,19 +184,24 @@ namespace Semgus.OrderSynthesis {
                     Console.Error.Write("Continuing");
                 }
 
+                LatticeStep.Output theta;
+
                 {
-                    var step = new LatticeStep(state.StructTypeList.Zip(state.Comparisons!));
-                    var result = await step.Execute(dir.Append("step_4_lattice/"),reuse_previous);
-                    state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };
+
+                    var step = new LatticeStep(rho.ZipComparisonsToTypes());
+                    theta = await step.Execute(dir.Append("step_4_lattice/"),reuse_previous);
+
+
+                    //state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };
                 }
 
-                if (!reuse_previous) {
-                    // TODO: load compares and monotonicities into abstract interpretation framework
-                    await PipelineUtil.WriteState(dir.Append("result/"), state);
-                }
+                //if (!reuse_previous) {
+                //    // TODO: load compares and monotonicities into abstract interpretation framework
+                //    await PipelineUtil.WriteState(dir.Append("result/"), state);
+                //}
 
                 Console.WriteLine("--- Pipeline finished ---");
-                return state;
+                return (rho,theta);
             } catch (Exception e) {
                 Console.Error.Write(e);
                 Console.Error.Write("Halting");

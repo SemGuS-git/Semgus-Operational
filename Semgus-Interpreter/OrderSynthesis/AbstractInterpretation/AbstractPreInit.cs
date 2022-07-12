@@ -1,5 +1,7 @@
-﻿using Semgus.Operational;
+﻿using Semgus.Model;
+using Semgus.Operational;
 using Semgus.OrderSynthesis.Subproblems;
+using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
@@ -11,7 +13,6 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
     internal record TermTypeTupleIds(Id inputTuple, Id outputTuple);
 
-
     internal class AbstractPreInit {
         record MiniHelper(string TermTypeKey, bool IsInputElseOutput);
 
@@ -22,6 +23,7 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
         private IReadOnlyDictionary<string, Bundle> HelperDict { get; }
 
         private IReadOnlyDictionary<NtSymbol, string> NonterminalTermTypes { get; }
+
 
 
         public AbstractPreInit(
@@ -101,27 +103,24 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
 
             // Include only the productions in this grammar
-            HashSet<ProductionRuleInterpreter> all_prod = new();
-            foreach (var prod in grammar.Productions.Values.SelectMany(val => val.Select(mu => mu.Production))) {
-                all_prod.Add(prod);
-            }
+            HashSet<ProductionRuleInterpreter> all_prod = grammar.Productions.Values.SelectMany(val => val.Select(mu => mu.Production)).ToHashSet();
 
             //// The point of *this* rigamarole is to construct equivalence classes of tuple types based on their usage.
-            EquivalenceClasses<MiniHelper, Id> eqc = new();
+            EquivalenceClasses<MiniHelper, Id> struct_types = new();
             HashSet<string> unseen_ttks = new();
 
             for (int i = 0; i < lib.TermTypes.Count; i++) {
                 Model.SemgusTermType termType = lib.TermTypes[i];
                 var ttk = termType.Name.Name.Symbol;
-                eqc.Add(new(ttk, true), new($"ttype{i}_in"));
-                eqc.Add(new(ttk, false), new($"ttype{i}_out"));
+                struct_types.Add(new(ttk, true), new($"ttype{i}_in"));
+                struct_types.Add(new(ttk, false), new($"ttype{i}_out"));
                 unseen_ttks.Add(ttk);
             }
 
 
             var main_list = lib.Productions.Where(all_prod.Remove).Select(prod => {
                 if (prod.Semantics.Count > 1) throw new NotSupportedException(); // TODO support multiple semantics via branching 
-                var (ltsc, ctc) = ExtractLinearCore(prod.Semantics[0], eqc);
+                var (ltsc, ctc) = ExtractLinearCore(prod.Semantics[0], struct_types);
 
                 unseen_ttks.Remove(prod.TermType.Name.Name.Symbol);
 
@@ -130,14 +129,14 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
 
             // Remove unused struct ids, just to be safe
             foreach (var ttk in unseen_ttks) {
-                eqc.Remove(new(ttk, true));
-                eqc.Remove(new(ttk, false));
+                struct_types.Remove(new(ttk, true));
+                struct_types.Remove(new(ttk, false));
             }
 
             Dictionary<Id, SketchSyntax.StructType> distinct_structs = new();
 
             var shuck = lib.TermTypes.ToDictionary(a => a.Name.Name.Symbol);
-            foreach (var (keys, struct_id) in eqc.Enumerate()) {
+            foreach (var (keys, struct_id) in struct_types.Enumerate()) {
                 var (some_ttk, isInputElseOutput) = keys.First();
 
                 var some_rel = lib.SemanticRelations.GetRelation(shuck[some_ttk]);
@@ -157,15 +156,15 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
                 ));
             }
 
-            Dictionary<string, Bundle> wett = new();
+            Dictionary<string, Bundle> helper_dict = new();
 
-            foreach (var mu in lib.TermTypes) {
-                var key = mu.Name.Name.Symbol;
+            foreach (var term_type in lib.TermTypes) {
+                var key = term_type.Name.Name.Symbol;
                 if (unseen_ttks.Contains(key)) continue;
-                wett.Add(key, new(eqc[new(key, true)], eqc[new(key, false)]));
+                helper_dict.Add(key, new(struct_types[new(key, true)], struct_types[new(key, false)]));
             }
 
-            return new(main_list, distinct_structs, wett, nt_to_ttk);
+            return new(main_list, distinct_structs, helper_dict, nt_to_ttk);
         }
 
         static Id MapSortToPrimTypeId(Sort sort) {
@@ -173,6 +172,7 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             if (sort.Name == Model.Smt.SmtCommonIdentifiers.IntSortId) return SketchSyntax.IntType.Id;
             throw new NotSupportedException();
         }
+
 
         private static (LinearTermSubtreeAbstraction, ConcreteTransformerCore) ExtractLinearCore(SemanticRuleInterpreter sem, EquivalenceClasses<MiniHelper, Id> eqc) {
             var prod = sem.ProductionRule;
@@ -292,4 +292,5 @@ namespace Semgus.OrderSynthesis.AbstractInterpretation {
             return tuple_idx;
         }
     }
+
 }

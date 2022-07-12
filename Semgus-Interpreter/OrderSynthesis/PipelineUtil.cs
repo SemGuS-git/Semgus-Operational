@@ -16,6 +16,7 @@ namespace Semgus.OrderSynthesis {
                 a.WriteInto(receiver);
             }
         }
+
         record MonoOutputLine(string Alias, IReadOnlyList<Monotonicity> Labels);
 
         public static async Task WriteState(FlexPath path, PipelineState state) {

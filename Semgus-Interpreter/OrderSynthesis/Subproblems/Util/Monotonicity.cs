@@ -3,5 +3,6 @@
         None,
         Increasing,
         Decreasing,
+        Constant,
     }
 }

@@ -8,110 +8,173 @@ using System.Diagnostics;
 namespace Semgus.OrderSynthesis.Subproblems {
     using static Sugar;
     internal class OrderExpansionStep {
-        public record Config(
-            IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
-            IReadOnlyList<StructType> StructTypeList,
-            IReadOnlyList<MonotoneLabeling> MonotoneFunctions,
-            IReadOnlyList<FunctionDefinition> PrevComparisons
-        );
+        //public record Config(
+        //    IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
+        //    IReadOnlyList<StructType> StructTypeList,
+        //    IReadOnlyList<MonotoneLabeling> MonotoneFunctions,
+        //    IReadOnlyList<FunctionDefinition> PrevComparisons
+        //);
+
+
 
         public int Iter { get; }
-        public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
+        //public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<StructType> Structs { get; }
-        public IReadOnlyList<MonotoneLabeling> MonotoneFunctions { get; }
-        public IReadOnlyList<FunctionDefinition> PrevComparisons { get; }
-        public IReadOnlyList<Variable> Budgets { get; private set; }
+        //public IReadOnlyList<MonotoneLabeling> MonotoneFunctions { get; }
+        public IReadOnlyDictionary<Identifier, FunctionDefinition> PrevComparisonsByStId { get; }
 
-        public OrderExpansionStep(int iter, Config config) {
+        public IReadOnlyList<AnnotatedQueryFunction> QueryFunctions { get; }
+        //public IReadOnlyList<Variable> Budgets { get; private set; }
+
+        public OrderExpansionStep(int iter, IReadOnlyList<StructType> struct_types, IReadOnlyList<FunctionDefinition> comparisons,IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
+            var compare_to_st_map = struct_types.ToDictionary(st => st.CompareId, st => st.Id);
+
             Iter = iter;
-            (StructTypeMap, Structs, MonotoneFunctions, PrevComparisons) = config;
+            Structs = struct_types;
 
-            Budgets = Structs.Select(s => new Variable($"budget_{s.Id}", IntType.Id)).ToList();
+            PrevComparisonsByStId = comparisons
+                .Select(c => (compare_to_st_map[c.Id], c with { Signature = c.Signature with { Id = new($"prev_{c.Id}") } }))
+                .ToDictionary(t=>t.Item1, t=> t.Item2);
 
-            Debug.Assert(PrevComparisons.All(f => StructTypeMap.TryGetValue(f.Signature.Args[0].TypeId, out var st) && f.Signature.Id != st.CompareId));
+
+            QueryFunctions = queryFunctions;
         }
 
+        
+
+        private record Bundle(StructType st, FunctionDefinition prev_cmp, Variable budget);
+
         public IEnumerable<IStatement> GetFile() {
-            foreach (var b in Budgets) {
-                yield return b.Declare(new Hole());
+            var bundles = Structs.Select(s => new Bundle(s, PrevComparisonsByStId[s.Id], new Variable($"budget_{s.Id}", IntType.Id))).ToList();
+
+            foreach (var b in bundles) {
+                var st = b.st;
+                yield return b.budget.Declare(new Hole());
+                yield return st.GetStructDef();
+                yield return st.GetEqualityFunction();
+                yield return b.prev_cmp;
+                yield return st.GetCompareReductionGenerator(b.budget);
+                yield return st.GetDisjunctGenerator();
+                yield return st.GetPartialOrderHarness();
+                // don't need the non-equivalence harness: this is established by the superset harness + prev step
+                yield return st.GetSupersetHarness(b.prev_cmp.Id);
             }
 
-            foreach (var st in Structs) {
-                yield return st.GetStructDef();
-            }
-            for (int i = 0; i < Structs.Count; i++) {
-                StructType? st = Structs[i];
-                yield return st.GetEqualityFunction();
-                yield return PrevComparisons[i];
-                yield return st.GetCompareReductionGenerator(Budgets[i]);
-                //yield return st.GetCompareRefinementGenerator(PrevComparisons[i].Id, Budgets[i]);
-                yield return st.GetDisjunctGenerator();
-            }
 
             yield return CompareAtomGenerators.GetBitAtom();
             yield return CompareAtomGenerators.GetIntAtom();
 
-            foreach (var fn in MonotoneFunctions) {
-                yield return fn.Function;
+            var sd_dict = Structs.ToDictionary(s => s.Id);
+            foreach (var q in QueryFunctions) {
+                yield return q.fdef;
+
+                foreach (var harness in GetMonotonicityHarnesses(q.fdef, q.relevant_block_ids, q.mono, sd_dict)) {
+                    yield return harness;
+                }
             }
 
-            yield return GetMain();
+            yield return GetExpansionHarness(bundles);
         }
 
-        public FunctionDefinition GetMain() {
-            var clasps = Clasp.GetAll(Structs, StructTypeMap, MonotoneFunctions.Select(f => f.Function.Signature));
 
-            List<IStatement> body = new();
+        static IEnumerable<FunctionDefinition> GetMonotonicityHarnesses(FunctionDefinition f, IReadOnlyList<int> relevant_block_ids, IReadOnlyList<Monotonicity> all_monotonicities, IReadOnlyDictionary<Identifier, StructType> struct_types) {
+            Debug.Assert(f.Signature.ReturnTypeId == BitType.Id);
+            Debug.Assert(f.Signature.Args.Count > 1);
+            Debug.Assert(f.Signature.Args.Select((a, i) => (a, i)).All(t => t.a.IsRef == (t.i == 1)));
 
-            var (input_args, input_assembly_statements) = MonotonicityStep.GetMainInitContent(clasps.SelectMany(c => c.Indexed.Append(c.Alternate)).ToList());
+            foreach (var i in relevant_block_ids) {
+                if (i == 1) throw new ArgumentException();
+                if (all_monotonicities[i] == Monotonicity.None) continue;
+                yield return GetMonotonicityHarness(f, i, struct_types, all_monotonicities[i]);
+            }
+        }
 
-            body.AddRange(input_assembly_statements);
+        static FunctionDefinition GetMonotonicityHarness(FunctionDefinition f, int target_idx, IReadOnlyDictionary<Identifier, StructType> struct_types, Monotonicity mono) {
 
-            // Superset prev relation
-            foreach (var (clasp, prev) in clasps.Zip(PrevComparisons)) {
-                body.Add(new AssertStatement(
-                    prev.Call(clasp.Indexed[0].Ref(), clasp.Alternate.Ref()).Implies(
-                        clasp.Type.CompareId.Call(clasp.Indexed[0].Ref(), clasp.Alternate.Ref())
-                    )
-                    //Op.Eq.Of(
-                    //    clasp.Type.CompareId.Call(clasp.A.Ref(), clasp.B.Ref()),
-                    //    prev.Call(clasp.A.Ref(), clasp.B.Ref())
-                    //    )
-                 ));
+
+            var n = f.Signature.Args.Count;
+
+            var outer_args = new List<FunctionArg>();
+            var steps = new List<IStatement>();
+
+            var output_st = struct_types[f.Signature.Args[1].TypeId];
+
+            for (int i = 0; i < n; i++) {
+                if (i == 1) continue;
+                var arg = f.Signature.Args[i];
+                struct_types[arg.TypeId].PutConstructionForInputBlock(outer_args, steps, arg.Variable);
+            }
+            var target_st = struct_types[f.Signature.Args[target_idx].TypeId];
+            var alt = new Variable("alt", target_st.Id);
+            struct_types[f.Signature.Args[target_idx].TypeId].PutConstructionForInputBlock(outer_args, steps, alt);
+
+            // If !cmp(alt, arg_i) return early
+            steps.Add(target_st.CompareId.Call(alt, outer_args[target_idx + 1].Variable).Assume());
+
+            var a_out = new Variable("a_out", output_st.Id);
+            var b_out = new Variable("b_out", output_st.Id);
+
+            steps.Add(a_out.Declare());
+            steps.Add(b_out.Declare());
+
+            var arg_list_a = new IExpression[n];
+            var arg_list_b = new IExpression[n];
+
+            for (int i = 0; i < n; i++) {
+                if (i == 1) {
+                    arg_list_a[i] = a_out.Ref();
+                    arg_list_b[i] = b_out.Ref();
+                } else {
+                    arg_list_a[i] = outer_args[i].Ref();
+                    if (i == target_idx) {
+                        arg_list_b[i] = alt.Ref();
+                    } else {
+                        arg_list_b[i] = outer_args[i].Ref();
+
+                    }
+                }
             }
 
-            // Maintain partial eq properties
-            body.Add(new Annotation("Check partial equality properties", 2));
-            foreach (var c in clasps) {
-                body.AddRange(c.Type.GetPartialEqAssertions(c.Indexed[0].Sig(), c.Indexed[1].Sig(), c.Indexed[2].Sig()));
-            }
+            // make sure the semantics hold
+            steps.Add(f.Call(arg_list_a).Assume());
+            steps.Add(f.Call(arg_list_b).Assume());
 
-            // Maintain monotonicity
-            body.Add(new Annotation("Monotonicity", 2));
+            var test = mono switch {
+                Monotonicity.None => throw new ArgumentException(),
+                Monotonicity.Increasing => output_st.CompareId.Call(a_out, b_out),
+                Monotonicity.Decreasing => output_st.CompareId.Call(b_out, a_out),
+                Monotonicity.Constant => output_st.EqId.Call(a_out, b_out),
+                _ => throw new ArgumentOutOfRangeException(),
+            };
 
-            var claspMap = clasps.ToDictionary(v => v.Type.Id);
-            foreach (var fn in MonotoneFunctions) {
-                body.AddRange(GetMonoAssertions(claspMap, fn));
-            }
+            // assert that the already-known monotonicity property still holds
+            steps.Add(test.Assert());
 
-            // Expand at least one relation
+            return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"mono_{f.Id}_v{target_idx}"), outer_args), steps);
+        }
+
+
+        private static FunctionDefinition GetExpansionHarness(IReadOnlyList<Bundle> bundles) {
+
+            List<IStatement> steps = new();
+
             List<IExpression> expFlagRefs = new();
-            for (int i = 0; i < Structs.Count; i++) {
-                var type = Structs[i];
-                Variable flag = new("exp_" + type.Name, BitType.Instance);
-                body.AddRange(GetExpansionAssertions(type, Budgets[i], PrevComparisons[i].Id, flag));
+            foreach(var b in bundles) {
+                Variable flag = new($"expand_ord_{b.st.Id}", BitType.Instance);
+                steps.AddRange(GetExpansionAssertions(b,flag));
                 expFlagRefs.Add(flag.Ref());
             }
 
-            body.Add(new AssertStatement(Op.Or.Of(expFlagRefs)));
+            steps.Add(Op.Or.Of(expFlagRefs).Assert());
 
-            // Minimize budget
-            body.Add(new MinimizeStatement(Op.Plus.Of(Budgets.Select(b => b.Ref()).ToList())));
+            // Minimize total budget
+            steps.Add(new MinimizeStatement(Op.Plus.Of(bundles.Select(b => b.budget.Ref()).ToList())));
 
-            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("require_expansion")), steps);
         }
 
-        private static IEnumerable<IStatement> GetExpansionAssertions(StructType type, Variable budget, Identifier prev, Variable expFlag) {
+        private static IEnumerable<IStatement> GetExpansionAssertions(Bundle bundle, Variable expFlag) {
+            var (type, prev, budget) = bundle;
             var a = Varn($"{type.Id}_new0", type.Id);
             var b = Varn($"{type.Id}_new1", type.Id);
 
@@ -126,57 +189,55 @@ namespace Semgus.OrderSynthesis.Subproblems {
             ));
         }
 
-        private IEnumerable<IStatement> GetMonoAssertions(IReadOnlyDictionary<Identifier, Clasp> clasps, MonotoneLabeling labeled) {
-            var fn = labeled.Function;
-            var sig = fn.Signature;
-            var labels = labeled.ArgMonotonicities;
-            if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
+        //private IEnumerable<IStatement> GetMonoAssertions(IReadOnlyDictionary<Identifier, Clasp> clasps, MonotoneLabeling labeled) {
+        //    var fn = labeled.Function;
+        //    var sig = fn.Signature;
+        //    var labels = labeled.ArgMonotonicities;
+        //    if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
 
-            List<VariableRef> fixed_args = new();
+        //    List<VariableRef> fixed_args = new();
 
-            {
-                Counter<Identifier> vcount = new();
-                foreach (var v in sig.Args) {
-                    var key = v.TypeId;
-                    fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
-                    vcount.Increment(key);
-                }
-            }
+        //    {
+        //        Counter<Identifier> vcount = new();
+        //        foreach (var v in sig.Args) {
+        //            var key = v.TypeId;
+        //            fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
+        //            vcount.Increment(key);
+        //        }
+        //    }
 
-            yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
+        //    yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
 
-            for (int i = 0; i < sig.Args.Count; i++) {
-                if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
+        //    for (int i = 0; i < sig.Args.Count; i++) {
+        //        if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
 
-                if (labels[i] == Monotonicity.None) {
-                    yield return new Annotation($"Argument {i}: no monotonicity");
-                    continue;
-                }
-                yield return new Annotation($"Argument {i}: {labels[i]}");
+        //        if (labels[i] == Monotonicity.None) {
+        //            yield return new Annotation($"Argument {i}: no monotonicity");
+        //            continue;
+        //        }
+        //        yield return new Annotation($"Argument {i}: {labels[i]}");
 
-                var alt_i = clasps[type_i.Id].Alternate;
+        //        var alt_i = clasps[type_i.Id].Alternate;
 
-                List<VariableRef> alt_args = new(fixed_args);
-                alt_args[i] = alt_i.Ref();
+        //        List<VariableRef> alt_args = new(fixed_args);
+        //        alt_args[i] = alt_i.Ref();
 
-                switch (labels[i]) {
-                    case Monotonicity.Increasing:
-                        yield return new AssertStatement(
-                            type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
-                        );
-                        break;
-                    case Monotonicity.Decreasing:
-                        yield return new AssertStatement(
-                            type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
-                        );
-                        break;
-                }
-            }
-        }
+        //        switch (labels[i]) {
+        //            case Monotonicity.Increasing:
+        //                yield return new AssertStatement(
+        //                    type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
+        //                );
+        //                break;
+        //            case Monotonicity.Decreasing:
+        //                yield return new AssertStatement(
+        //                    type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
+        //                );
+        //                break;
+        //        }
+        //    }
+        //}
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
-        public static async Task<Output> ExecuteLoop(FlexPath dir, PipelineState state, bool reuse_prev = false) {
-            var comparisons = state.Comparisons ?? throw new NullReferenceException();
-            IReadOnlyList<FunctionDefinition> prev_compare = Array.Empty<FunctionDefinition>();
+        public static async Task<Output> ExecuteLoop(FlexPath dir, MonotonicityStep.Output prior, bool reuse_prev = false) {
 
             const int MAX_REFINEMENT_STEPS = 100;
 
@@ -194,12 +255,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
 
             int i = 0;
+            var comparisons = prior.Comparisons;
             for (; i < MAX_REFINEMENT_STEPS; i++) {
-                prev_compare = comparisons
-                    .Select(c => c with { Signature = c.Signature with { Id = new("prev_" + c.Id.Name) } })
-                    .ToList();
-
-                var refinement_step = new OrderExpansionStep(i, new(state.StructTypeMap, state.StructTypeList, state.LabeledTransformers!.Where(tf=>tf.Any).ToList(), prev_compare));
+                var refinement_step = new OrderExpansionStep(i, prior.StructDefs, comparisons, prior.QueryFunctions);
 
                 var dir_refinement = dir.Append($"iter_{i}/");
 
@@ -208,8 +266,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 comparisons = result.Comparisons;
             }
 
-            return new(prev_compare);
+            return new(comparisons);
         }
+
         public async Task<(Output output, bool stopFlag)> Execute(FlexPath dir, bool reuse_prev = false) {
             Directory.CreateDirectory(dir.PathWin);
 
@@ -219,12 +278,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             if (reuse_prev) {
                 System.Console.WriteLine($"--- [Refinement {Iter}] Reusing previous result ---");
-                if(!File.Exists(file_out.PathWin)) {
+                if (!File.Exists(file_out.PathWin)) {
                     Console.WriteLine($"--- [Refinement {Iter}] No result.sk; done with refinement ---");
                     return (new(Array.Empty<FunctionDefinition>()), true);
                 }
 
-            } else { 
+            } else {
                 System.Console.WriteLine($"--- [Refinement {Iter}] Writing input file at {file_in} ---");
 
                 using (StreamWriter sw = new(file_in.PathWin)) {
@@ -249,7 +308,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             var compare_ids = this.Structs.Select(s => s.CompareId).ToList();
 
-            var extraction_targets = compare_ids.Concat(this.PrevComparisons.Select(p => p.Id));
+            var extraction_targets = compare_ids.Concat(this.PrevComparisonsByStId.Values.Select(p => p.Id));
             IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();
             try {
                 extracted_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);

@@ -15,8 +15,10 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         public Identifier CompareId { get; }
         public Identifier DisjunctId { get; }
         public Identifier EqId { get; }
-        public Identifier NonEqId { get; }
+        public Identifier NotEquivalenceHarnessId { get; }
+        public Identifier PartialOrderHarnessId { get; }
         public Identifier BotTopValues { get; }
+        public Identifier SupersetHarnessId { get; }
 
         public StructType(Identifier id, IReadOnlyList<Variable> elements) {
             this.Id = id;
@@ -25,7 +27,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             CompareId = new($"compare_{id}");
             EqId = new($"eq_{id}");
             DisjunctId = new($"disjunct_{id}");
-            NonEqId = new($"non_eq_{id}");
+            NotEquivalenceHarnessId = new($"not_eqivalence_{id}");
+            PartialOrderHarnessId = new($"partial_order_{id}");
+            SupersetHarnessId = new($"next_order_is_superset_{id}");
         }
 
         public override string ToString() => Id.ToString();

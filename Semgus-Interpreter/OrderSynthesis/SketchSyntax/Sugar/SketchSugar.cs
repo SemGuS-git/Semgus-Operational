@@ -29,6 +29,9 @@ namespace Semgus.OrderSynthesis.SketchSyntax.Helpers {
 
         public static AssertStatement Assertion(IExpression v) => new(v);
 
+        public static AssertStatement Assert(this IExpression v) => new(v);
+        public static AssumeStatement Assume(this IExpression v) => new(v);
+
         public static UnaryOperation Not(IExpression v) => new(UnaryOp.Not, v);
 
 
