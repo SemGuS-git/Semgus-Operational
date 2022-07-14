@@ -10,6 +10,8 @@ namespace Semgus.Util {
 
         public int Peek(TKey key) => _dict.TryGetValue(key, out var value) ? value : 0;
 
+        public void Init(TKey key, int initialCount) => _dict.Add(key, initialCount);
+
         public int Increment(TKey key) {
             var i = _dict.SafeGet(key);
             i += 1;

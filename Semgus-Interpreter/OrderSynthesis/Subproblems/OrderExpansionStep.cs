@@ -66,9 +66,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             var sd_dict = Structs.ToDictionary(s => s.Id);
             foreach (var q in QueryFunctions) {
-                yield return q.fdef;
+                foreach(var a in q.query.preconditions.Append(q.query.output_transformer)) {
+                    yield return a;
+                }
 
-                foreach (var harness in GetMonotonicityHarnesses(q.fdef, q.relevant_block_ids, q.mono, sd_dict)) {
+                foreach (var harness in GetMonotonicityHarnesses(q, sd_dict)) {
                     yield return harness;
                 }
             }
@@ -77,80 +79,94 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
 
-        static IEnumerable<FunctionDefinition> GetMonotonicityHarnesses(FunctionDefinition f, IReadOnlyList<int> relevant_block_ids, IReadOnlyList<Monotonicity> all_monotonicities, IReadOnlyDictionary<Identifier, StructType> struct_types) {
-            Debug.Assert(f.Signature.ReturnTypeId == BitType.Id);
-            Debug.Assert(f.Signature.Args.Count > 1);
-            Debug.Assert(f.Signature.Args.Select((a, i) => (a, i)).All(t => t.a.IsRef == (t.i == 1)));
+        static IEnumerable<FunctionDefinition> GetMonotonicityHarnesses(AnnotatedQueryFunction aq, IReadOnlyDictionary<Identifier, StructType> struct_types) {
+            Debug.Assert(!aq.query.relevant_block_ids.Contains(1));
 
-            foreach (var i in relevant_block_ids) {
-                if (i == 1) throw new ArgumentException();
-                if (all_monotonicities[i] == Monotonicity.None) continue;
-                yield return GetMonotonicityHarness(f, i, struct_types, all_monotonicities[i]);
+            foreach (var i in aq.query.relevant_block_ids) {
+                if (aq.mono[i] == Monotonicity.None) continue;
+                yield return GetMonotonicityHarness(aq.query, i, struct_types, aq.mono[i]);
             }
         }
 
-        static FunctionDefinition GetMonotonicityHarness(FunctionDefinition f, int target_idx, IReadOnlyDictionary<Identifier, StructType> struct_types, Monotonicity mono) {
+        static FunctionDefinition GetMonotonicityHarness(
+            MonoQueryBundle query,
+            int target_block_id,
+            IReadOnlyDictionary<Identifier, StructType> struct_types, 
+            Monotonicity mono
+        ) {
+            static int convert_index(int i) => i > 1 ? i - 1 : i;
+            
+            var target_idx = convert_index(target_block_id);
 
+            var f = query.output_transformer;
 
-            var n = f.Signature.Args.Count;
+            var args = f.Signature.Args;
+            var n = args.Count;
 
-            var outer_args = new List<FunctionArg>();
+            var raw_outer_args = new List<FunctionArg>();
             var steps = new List<IStatement>();
 
-            var output_st = struct_types[f.Signature.Args[1].TypeId];
 
-            for (int i = 0; i < n; i++) {
-                if (i == 1) continue;
-                var arg = f.Signature.Args[i];
-                struct_types[arg.TypeId].PutConstructionForInputBlock(outer_args, steps, arg.Variable);
-            }
             var target_st = struct_types[f.Signature.Args[target_idx].TypeId];
-            var alt = new Variable("alt", target_st.Id);
-            struct_types[f.Signature.Args[target_idx].TypeId].PutConstructionForInputBlock(outer_args, steps, alt);
+            var output_st = struct_types[f.Signature.ReturnTypeId];
 
-            // If !cmp(alt, arg_i) return early
-            steps.Add(target_st.CompareId.Call(alt, outer_args[target_idx + 1].Variable).Assume());
+            static Variable fab(Identifier type_id, int i) => new($"{type_id}_{i}", type_id);
 
-            var a_out = new Variable("a_out", output_st.Id);
-            var b_out = new Variable("b_out", output_st.Id);
+            var instances = new DictOfList<Identifier, Variable>();
 
-            steps.Add(a_out.Declare());
-            steps.Add(b_out.Declare());
+            // create extra instance for the varying argument
+            instances.SafeGetCollection(target_st.Id).Add(fab(target_st.Id, 0));
+
+            // make instances
+            for (int i = 0; i < n; i++) {
+                var t = f.Signature.Args[i].TypeId;
+                var l = instances.SafeGetCollection(t);
+                l.Add(fab(t, l.Count));
+            }
+
+            foreach(var kvp in instances) {
+                foreach(var obj in kvp.Value) {
+                    struct_types[kvp.Key].PutConstructionForInputBlock(raw_outer_args, steps, obj);
+                }
+            }
 
             var arg_list_a = new IExpression[n];
             var arg_list_b = new IExpression[n];
 
-            for (int i = 0; i < n; i++) {
-                if (i == 1) {
-                    arg_list_a[i] = a_out.Ref();
-                    arg_list_b[i] = b_out.Ref();
-                } else {
-                    arg_list_a[i] = outer_args[i].Ref();
-                    if (i == target_idx) {
-                        arg_list_b[i] = alt.Ref();
-                    } else {
-                        arg_list_b[i] = outer_args[i].Ref();
 
-                    }
+            var a_in = instances[target_st.Id][0];
+            var b_in = instances[target_st.Id][1];
+
+            var ctr = new Counter<Identifier>();
+            ctr.Init(target_st.Id, 2);
+
+            for (int i = 0; i < n; i++) {
+                if (i == target_idx) {
+                    arg_list_a[i] = a_in.Ref();
+                    arg_list_b[i] = b_in.Ref();
+                } else {
+                    var u = args[i].TypeId;
+                    arg_list_a[i] = instances[u][ctr.Increment(u) - 1].Ref();
+                    arg_list_b[i] = arg_list_a[i];
                 }
             }
 
-            // make sure the semantics hold
-            steps.Add(f.Call(arg_list_a).Assume());
-            steps.Add(f.Call(arg_list_b).Assume());
+            IExpression inputs_ord = target_st.CompareId.Call(a_in, b_in);
+            var guard = query.preconditions.Count == 0 ? inputs_ord :
+                Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(a_in), p.Call(b_in) }).Append(inputs_ord).ToList());
+
+            var a_out = query.output_transformer.Call(arg_list_a);
+            var b_out = query.output_transformer.Call(arg_list_b);
 
             var test = mono switch {
-                Monotonicity.None => throw new ArgumentException(),
                 Monotonicity.Increasing => output_st.CompareId.Call(a_out, b_out),
                 Monotonicity.Decreasing => output_st.CompareId.Call(b_out, a_out),
-                Monotonicity.Constant => output_st.EqId.Call(a_out, b_out),
-                _ => throw new ArgumentOutOfRangeException(),
+                _ => throw new ArgumentException(),
             };
 
-            // assert that the already-known monotonicity property still holds
-            steps.Add(test.Assert());
+            steps.Add(Op.Or.Of(UnaryOp.Not.Of(guard), test).Assert());
 
-            return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"mono_{f.Id}_v{target_idx}"), outer_args), steps);
+            return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"mono_{f.Id}_v{target_block_id}"), raw_outer_args), steps);
         }
 
 

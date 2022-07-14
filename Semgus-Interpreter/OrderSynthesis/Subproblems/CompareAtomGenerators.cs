@@ -18,7 +18,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var var_t = Varn("t", IntType.Id);
 
             return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, GetAtomFunctionId(BitType.Id), var_a, var_b),
-                new VariableDeclaration(var_t, new Hole()),
+                new VariableDeclaration(var_t, new Hole(2)),
                 var_t.IfEq(Lit0, Return(var_a.Implies(var_b))),
                 var_t.IfEq(Lit1, Return(var_b.Implies(var_a))),
                 new ReturnStatement(Lit1)
@@ -31,7 +31,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var var_t = Varn("t", IntType.Id);
 
             return new(new FunctionSignature(FunctionModifier.Generator, BitType.Id, GetAtomFunctionId(IntType.Id), var_a, var_b),
-                new VariableDeclaration(var_t, new Hole()),
+                new VariableDeclaration(var_t, new Hole(3)),
                 var_t.IfEq(Lit0, Return(Op.Eq.Of(var_a, var_b))),
                 var_t.IfEq(Lit1, Return(Op.Leq.Of(var_a, var_b))),
                 var_t.IfEq(Lit2, Return(Op.Lt.Of(var_a, var_b))),

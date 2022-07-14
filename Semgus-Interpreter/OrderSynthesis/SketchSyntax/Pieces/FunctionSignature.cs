@@ -20,7 +20,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         static IReadOnlyList<FunctionArg> ToArgs(Variable first, IEnumerable<Variable> rest) => rest.Prepend(first).Select(v => new FunctionArg(v.Id, v.TypeId)).ToList();
 
         public override string ToString() {
-            var a = $"{GetPrefix(Flag)}{ReturnTypeId} {Id} ({string.Join(", ", Args.Select(a => $"{a.TypeId} {a.Id}"))})";
+            var a = $"{GetPrefix(Flag)}{ReturnTypeId} {Id} ({string.Join(", ", Args.Select(a => a.IsRef ? $"ref {a.TypeId} {a.Id}" : $"{a.TypeId} {a.Id}"))})";
             if (ImplementsId is not null) a += $" implements {ImplementsId}";
             return a;
         }

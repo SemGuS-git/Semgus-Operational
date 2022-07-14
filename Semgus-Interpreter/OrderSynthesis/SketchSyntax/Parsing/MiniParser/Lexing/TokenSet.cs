@@ -15,7 +15,7 @@ namespace Semgus.MiniParser {
         }
 
         public static TokenSet ForSketch { get; } = new(
-            "if else return assert minimize new repeat ref harness generator struct implements".Split(' '),
+            "if else return assert assume minimize new repeat ref harness generator struct implements".Split(' '),
                 "=+-*<>!(){},;?:.".Select(c => new string(c, 1)).Concat("== != || && <= >= ?? --".Split(' ')),
                 new Dictionary<string, string>() { { "//{};", ";" } } // handle weird junk line endings
             );

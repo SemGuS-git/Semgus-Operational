@@ -15,6 +15,19 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
     public record BlockItemRef(int block_id, int slot);
 
     public static class Extensions {
+        public static IEnumerable<T> SkipAt<T>(this IEnumerable<T> e, int idx) {
+            var rator = e.GetEnumerator();
+
+            for(int i = 0; i < idx; i++) {
+                if (!rator.MoveNext()) yield break;
+                yield return rator.Current;
+            }
+            if (!rator.MoveNext()) yield break;
+            while(rator.MoveNext()) {
+                yield return rator.Current;
+            }
+        }
+
         public static bool AllElementsEqual<T>(this IEnumerable<T> e) where T : IEquatable<T> {
             var enumerator = e.GetEnumerator();
 
@@ -36,6 +49,11 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
         }
 
         public static string GetKey(this SemgusTermType stt) => stt.Name.Name.Symbol;
+
+        public static string ToStringAsTuple<T>(this IEnumerable<T> list) {
+            var sb = new StringBuilder();
+            return '('+ string.Join(", ", list)+')';
+        }
     }
 
     public interface IBlockStep { }
@@ -58,7 +76,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
     public record BlockExprLiteral(TypeLabel TypeLabel, object Value) : IBlockExpression;
 
 
-    public record BlockDef(int Id, List<TypeLabel> Members) {
+    public record BlockDef(int Id, IReadOnlyList<TypeLabel> Members) {
         public int Size => Members.Count;
     }
 
@@ -87,20 +105,51 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
             TermTypeInputOutput = termTypeInputOutput;
         }
 
-        public BlockDef GetInputBlockType(SemgusTermType term_type) {
-            return BlockTypes[TermTypeInputOutput[TermTypeIds[term_type.Name.Name.Symbol]].type_id_in];
-        }
-        public BlockDef GetOutputBlockType(SemgusTermType term_type) {
-            return BlockTypes[TermTypeInputOutput[TermTypeIds[term_type.Name.Name.Symbol]].type_id_out];
+        public BlockDef GetInputBlockType(SemgusTermType term_type) => GetInputBlockType(TermTypeIds[term_type.Name.Name.Symbol]);
+        public BlockDef GetOutputBlockType(SemgusTermType term_type) => GetOutputBlockType(TermTypeIds[term_type.Name.Name.Symbol]);
+        public BlockDef GetInputBlockType(int term_type_id) => BlockTypes[TermTypeInputOutput[term_type_id].type_id_in];
+        public BlockDef GetOutputBlockType(int term_type_id) => BlockTypes[TermTypeInputOutput[term_type_id].type_id_out];
 
-        }
         public int GetTermTypeId(SemgusTermType term_type) {
             return TermTypeIds[term_type.Name.Name.Symbol];
         }
 
-        record BlockShape(List<TypeLabel> types) {
+        class BlockShape : IEquatable<BlockShape?> {
+            public IReadOnlyList<TypeLabel> Types { get; }
+
+            public BlockShape(IReadOnlyList<TypeLabel> types) {
+                Types = types;
+            }
+
             public static BlockShape From(IReadOnlyList<VariableInfo> variables) {
                 return new(variables.Select(v => ConvertSort(v.Sort)).ToList());
+            }
+
+
+            public override int GetHashCode() {
+                var h = new HashCode();
+                foreach (var a in Types) h.Add(a);
+                return h.ToHashCode();
+            }
+
+            public override string? ToString() {
+                return this.Types.ToStringAsTuple();
+            }
+
+            public override bool Equals(object? obj) {
+                return Equals(obj as BlockShape);
+            }
+
+            public bool Equals(BlockShape? other) {
+                return other != null && Types.SequenceEqual(other.Types);
+            }
+
+            public static bool operator ==(BlockShape? left, BlockShape? right) {
+                return EqualityComparer<BlockShape>.Default.Equals(left, right);
+            }
+
+            public static bool operator !=(BlockShape? left, BlockShape? right) {
+                return !(left == right);
             }
         }
 
@@ -142,14 +191,14 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
             }
 
 
-            var block_types = Sequentialize(block_ids).Select((a, i) => new BlockDef(i, a.types)).ToList();
+            var block_types = Sequentialize(block_ids).Select((a, i) => new BlockDef(i, a.Types)).ToList();
 
 
             return new(term_type_ids, block_types, io_list);
         }
         public BlockProduction GetBlockAbstraction(ProductionRuleInterpreter prod) {
             var term_type = this.GetTermTypeId(prod.TermType);
-            var name = prod.SyntaxConstructor.ToString();
+            var name = prod.ToString();
             var semantics = prod.Semantics.Select(a => GetBlockAbstraction(a)).ToList();
             return new(term_type, name, semantics);
         }

@@ -9,8 +9,10 @@ using System.Xml.Serialization;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     using static Sugar;
+    internal record MonoQueryBundle(FunctionDefinition output_transformer, IReadOnlyList<FunctionDefinition> preconditions, IReadOnlyList<int> relevant_block_ids);
+
     class FunctionNamespace2 {
-        public Dictionary<BlockItemRef, ISettable> VarMap { get; } = new();
+        public Dictionary<BlockItemRef, ISettable> VarMap { get; }
 
         public FunctionNamespace2(IEnumerable<(FunctionArg, StructType)> args) {
             var var_map = new Dictionary<BlockItemRef, ISettable>();
@@ -19,7 +21,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             foreach (var arg in args) {
                 for (int j = 0; j < arg.Item2.Elements.Count; j++) {
                     var item = arg.Item2.Elements[j];
-                    VarMap.Add(new(i, j), arg.Item1.Variable.Get(item.Id));
+                    var_map.Add(new(i, j), arg.Item1.Variable.Get(item.Id));
                 }
                 i++;
             }
@@ -101,7 +103,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
     internal class MonotonicityStep {
         IReadOnlyList<StructType> StructDefs { get; }
-        IReadOnlyList<(FunctionDefinition fdef, List<int> relevant_block_ids)> QueryFunctions { get; } // at most one per sem
+        IReadOnlyList<MonoQueryBundle> QueryFunctions { get; } // at most one per sem
 
         IReadOnlyDictionary<Identifier, (int prod_idx, int sem_idx)> QueryIdMap { get; }
 
@@ -117,22 +119,22 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Dictionary<Identifier, (int prod_idx, int sem_idx)> query_fn_id_map = new();
 
-            List<(FunctionDefinition fdef, List<int> relevant_block_ids)> query_fns = new();
+            List<MonoQueryBundle> query_fns = new();
 
             for (int i = 0; i < stuff.Productions.Count; i++) {
                 var prod = stuff.Productions[i];
                 for (int j = 0; j < prod.Semantics.Count; j++) {
                     var sem = prod.Semantics[j];
                     var fn_id = new Identifier($"prod_{i}_sem_{j}");
-                    var (fdef, req_block_ids) = GetMonoSubjectFunction(struct_defs, fn_id, sem);
+                    var bundle = GetMonoSubjectFunction(struct_defs, fn_id, sem);
 
                     // omit sems with only trivial transformers.
                     // - If directly passing output from a child term, no transformer step is required.
                     // - If assigning from variable-free formulas, e.g. in literal terminals, we implicitly construct a singular interval.
 
-                    if (req_block_ids.Count>0) {
-                        query_fns.Add((fdef, req_block_ids));
-                        query_fn_id_map.Add(fdef.Id, (i, j));
+                    if (bundle.relevant_block_ids.Count > 0) {
+                        query_fns.Add(bundle);
+                        query_fn_id_map.Add(bundle.output_transformer.Id, (i, j));
                     }
                 }
             }
@@ -144,9 +146,6 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
 
         public IEnumerable<IStatement> GetFile() {
-            var mono_count = new Variable("mono_count", IntType.Id);
-            yield return mono_count.Declare(new Hole());
-
             yield return CompareAtomGenerators.GetBitAtom();
             yield return CompareAtomGenerators.GetIntAtom();
 
@@ -155,70 +154,60 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 yield return st.GetEqualityFunction();
                 yield return st.GetCompareGenerator();
                 yield return st.GetDisjunctGenerator();
-                yield return st.GetPartialOrderHarness();
                 yield return st.GetNonEqualityHarness();
             }
 
-            var sd_dict = StructDefs.ToDictionary(a => a.Id);
-
-
-            var max_mono = 0;
             foreach (var q in QueryFunctions) {
-                yield return q.fdef;
-
-                foreach (var harness in GetMonotonicityHarnesses(q.fdef, q.relevant_block_ids, sd_dict, mono_count)) {
-                    max_mono += 2;
-                    yield return harness;
-                }
+                foreach (var fdef in q.preconditions.Append(q.output_transformer)) yield return fdef;
             }
 
-            yield return GetMinimizerHarness(mono_count, max_mono);
+            yield return GetMain(StructDefs, QueryFunctions);
         }
 
+        /*
         static FunctionDefinition GetMinimizerHarness(Variable mono_count, int max_mono) {
             return new(new(FunctionModifier.Harness, VoidType.Id, new Identifier("maximize_mono")),
                 new MinimizeStatement(Op.Minus.Of(new Literal(max_mono), mono_count.Ref()))
             );
         }
 
-        static IEnumerable<FunctionDefinition> GetMonotonicityHarnesses(FunctionDefinition f, IReadOnlyList<int> relevant_block_ids, IReadOnlyDictionary<Identifier, StructType> struct_types, Variable mono_count) {
+        static IEnumerable<FunctionDefinition> GetMonotonicityHarnesses(FunctionDefinition f, IReadOnlyList<int> relevant_block_ids, IReadOnlyDictionary<Identifier, StructType> struct_types) {
             Debug.Assert(f.Signature.ReturnTypeId == BitType.Id);
             Debug.Assert(f.Signature.Args.Count > 1);
             Debug.Assert(f.Signature.Args.Select((a, i) => (a, i)).All(t => t.a.IsRef == (t.i == 1)));
+            Debug.Assert(!relevant_block_ids.Contains(1));
 
             foreach (var i in relevant_block_ids) {
-                if (i == 1) throw new ArgumentException();
-
-                yield return GetMonotonicityHarness(f, i, struct_types, mono_count);
+                yield return GetMonotonicityHarness(f, i, struct_types);
             }
         }
-
-        static FunctionDefinition GetMonotonicityHarness(FunctionDefinition f, int target_idx, IReadOnlyDictionary<Identifier, StructType> struct_types, Variable mono_count) {
+        static FunctionDefinition GetMonotonicityHarness(FunctionDefinition f, int target_idx, IReadOnlyDictionary<Identifier, StructType> struct_types) {
             var n = f.Signature.Args.Count;
 
-            var outer_args = new List<FunctionArg>();
+            var raw_outer_args = new List<FunctionArg>();
             var steps = new List<IStatement>();
 
             var output_st = struct_types[f.Signature.Args[1].TypeId];
 
+            var constructed_vars = new List<Variable?>();
+
             for (int i = 0; i < n; i++) {
-                if (i == 1) continue;
-                var arg = f.Signature.Args[i];
-                struct_types[arg.TypeId].PutConstructionForInputBlock(outer_args, steps, arg.Variable);
+                if (i == 1) {
+                    constructed_vars.Add(null);
+                } else {
+                    var arg_var = f.Signature.Args[i].Variable;
+                    struct_types[arg_var.TypeId].PutConstructionForInputBlock(raw_outer_args, steps, arg_var);
+                    constructed_vars.Add(arg_var);
+                }
             }
+
+
             var target_st = struct_types[f.Signature.Args[target_idx].TypeId];
             var alt = new Variable("alt", target_st.Id);
-            struct_types[f.Signature.Args[target_idx].TypeId].PutConstructionForInputBlock(outer_args, steps, alt);
+            struct_types[f.Signature.Args[target_idx].TypeId].PutConstructionForInputBlock(raw_outer_args, steps, alt);
 
-            var flag_inc = new Variable("mono_inc", BitType.Id);
-            var flag_dec = new Variable("mono_dec", BitType.Id);
-
-            steps.Add(flag_inc.Declare(new Hole($"#MONO+ {f.Id}.{target_idx}")));
-            steps.Add(flag_dec.Declare(new Hole($"#MONO- {f.Id}.{target_idx}")));
-
-
-            // If !cmp(alt, arg_i) return early
-            steps.Add(target_st.CompareId.Call(alt, outer_args[target_idx + 1].Variable).Assume());
+            var mono_kind = new Variable("mono_kind", IntType.Id);
+            steps.Add(mono_kind.Declare(new Hole(2,$"#MONO! {f.Id}.{target_idx}")));
 
             var a_out = new Variable("a_out", output_st.Id);
             var b_out = new Variable("b_out", output_st.Id);
@@ -234,96 +223,74 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     arg_list_a[i] = a_out.Ref();
                     arg_list_b[i] = b_out.Ref();
                 } else {
-                    arg_list_a[i] = outer_args[i].Ref();
+                    arg_list_a[i] = constructed_vars[i]!.Ref();
                     if (i == target_idx) {
                         arg_list_b[i] = alt.Ref();
                     } else {
-                        arg_list_b[i] = outer_args[i].Ref();
+                        arg_list_b[i] = constructed_vars[i]!.Ref();
 
                     }
                 }
             }
 
-            // make sure the semantics hold
-            steps.Add(f.Call(arg_list_a).Assume());
-            steps.Add(f.Call(arg_list_b).Assume());
 
-            steps.Add(new IfStatement(flag_inc.Ref(),
-                new IfStatement(flag_dec.Ref(),
-                    output_st.EqId.Call(a_out, b_out).Assert(),
-                    mono_count.Assign(Op.Plus.Of(mono_count.Ref(), Lit2))
-                ).Else(
-                    output_st.CompareId.Call(a_out, b_out).Assert(),
-                    mono_count.Assign(Op.Plus.Of(mono_count.Ref(), Lit1))
+            // If !cmp(alt, arg_i) return early
+            steps.Add(new IfStatement(
+                Op.And.Of(
+                    target_st.CompareId.Call(alt, constructed_vars[target_idx]!),
+                    f.Call(arg_list_a),
+                    f.Call(arg_list_b)
+                ), mono_kind.IfEq(Lit0,
+                    output_st.EqId.Call(a_out, b_out).Assert()
+                ).ElseIf(Op.Eq.Of(mono_kind.Ref(), Lit1),
+                    output_st.CompareId.Call(a_out, b_out).Assert()
+                ).ElseIf(Op.Eq.Of(mono_kind.Ref(), Lit2),
+                    output_st.CompareId.Call(b_out, a_out).Assert()
                 )
-              ).ElseIf(flag_dec.Ref(),
-                output_st.CompareId.Call(b_out, a_out).Assert(),
-                mono_count.Assign(Op.Plus.Of(mono_count.Ref(), Lit1))
-              )
-            );
-
-            return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"mono_{f.Id}_v{target_idx}"), outer_args), steps);
-        }
-
-        public static void Au(IntervalSemantics.InitialStuff initial) {
-
-            var struct_defs = initial.TypeHelper.BlockTypes.Select((bt, i) =>
-                new StructType(
-                    new($"block_{i}"),
-                    bt.Members.Select((label, j) =>
-                        new Variable($"v{j}", Util.MapLabelToTypeIdentifier(label))
-                    ).ToList()
-                )
-            ).ToList();
+            ));
+            steps.Add(new MinimizeStatement(mono_kind.Ref()));
 
 
-            for (int i = 0; i < initial.Productions.Count; i++) {
-                var prod = initial.Productions[i];
-                for (int j = 0; j < prod.Semantics.Count; j++) {
-                    var sem = prod.Semantics[j];
+            return new FunctionDefinition(new(FunctionModifier.Harness, VoidType.Id, new($"mono_{f.Id}_v{target_idx}"), raw_outer_args), steps);
+        }*/
 
-                    //sem.Steps
-                }
-            }
-        }
 
-        static IReadOnlyDictionary<int, (Identifier fn_id, int arg_id, bool is_inc_else_dec)> ScanHoleLines(StreamReader reader) {
-            Regex a = new(@"/\*#MONO ([+-]) (.+)\.([0-9]+)\*/", RegexOptions.Compiled);
-            Dictionary<int, (Identifier fn_id, int arg_id, bool is_inc_else_dec)> line_map = new();
+        static IReadOnlyDictionary<int, (Identifier fn_id, int arg_id)> ScanHoleLines(StreamReader reader) {
+            Regex a = new(@"/\*#MONO (.+)\.([0-9]+)\*/", RegexOptions.Compiled);
+            Dictionary<int, (Identifier fn_id, int arg_id)> line_map = new();
             int i = 1;
 
-            while(reader.ReadLine() is var line) { 
+            while (reader.ReadLine() is string line) {
                 var match = a.Match(line);
-                if(match.Success) {
-                    var is_inc_else_dec = match.Groups[1].Value switch {
-                        "+" => true,
-                        "-" => false,
-                        _ => throw new InvalidDataException(),
-                    };
-                    var fn_id = new Identifier(match.Groups[2].Value);
-                    var arg_id = int.Parse(match.Groups[3].Value);
+                if (match.Success) {
+                    var fn_id = new Identifier(match.Groups[1].Value);
+                    var arg_id = int.Parse(match.Groups[2].Value);
 
-                    line_map.Add(i, (fn_id, arg_id, is_inc_else_dec));
+                    line_map.Add(i, (fn_id, arg_id));
                 }
                 i++;
             }
             return line_map;
         }
 
-        static IReadOnlyDictionary<Identifier,Monotonicity[]> ExtractMonotonicities(HolesXmlDoc doc, IReadOnlyDictionary<Identifier,FunctionDefinition> query_functions, IReadOnlyDictionary<int,(Identifier fn_id, int arg_id, bool is_inc_else_dec)> line_map) {
+        static IReadOnlyDictionary<Identifier, Monotonicity[]> ExtractMonotonicities(
+            HolesXmlDoc doc,
+            IReadOnlyDictionary<Identifier, FunctionDefinition> query_functions,
+            IReadOnlyDictionary<int, (Identifier fn_id, int arg_id)> line_map
+        ) {
             HashSet<int> consumed_lines = new();
 
             var d_mono = new Dictionary<Identifier, Monotonicity[]>();
 
-            foreach(var line in doc.Items) {
-                if (line_map.TryGetValue (line.Line, out var target) ){
+            foreach (var line in doc.Items) {
+                if (line_map.TryGetValue(line.Line, out var target)) {
                     Debug.Assert(consumed_lines.Add(line.Line)); // Each relevant line should only have one hole
 
                     var fdef = query_functions[target.fn_id];
 
                     Monotonicity[] mono;
                     if (!d_mono.TryGetValue(target.fn_id, out mono)) {
-                        mono = new Monotonicity[fdef.Signature.Args.Count - 1];
+                        mono = new Monotonicity[fdef.Signature.Args.Count+1]; // include the output slot as having constant monotonicity
 
                         // Initialize values to constant.
                         // So, if a particular arg is not tested, we assume it is constant wrt its semantics.
@@ -331,26 +298,85 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         d_mono.Add(target.fn_id, mono);
                     }
 
+                    mono[target.arg_id] = line.Value switch {
+                        0 => Monotonicity.Increasing,
+                        1 => Monotonicity.Decreasing,
+                        _ => Monotonicity.None
+                    };
+                }
+            }
 
-                    if(line.Value==0) {
-                        mono[target.arg_id] = (target.is_inc_else_dec, mono[target.arg_id]) switch {
-                            (true,Monotonicity.Constant) => Monotonicity.Decreasing,
-                            (true,Monotonicity.Increasing) => Monotonicity.None,
-                            (false,Monotonicity.Constant) => Monotonicity.Increasing,
-                            (false,Monotonicity.Decreasing) => Monotonicity.None,
-                            _ => throw new InvalidOperationException(),
-                        };
+            return d_mono;
+        }
+        static FunctionDefinition GetMain(
+            IReadOnlyList<StructType> tuple_defs,
+            IReadOnlyList<MonoQueryBundle> query_subjects
+        ) {
+            var instances_needed_per_type = new Dictionary<Identifier, int>();
+
+            static int map_block_id(int i) => i > 1 ? i - 1 : i;
+
+            // at least 3 instances are needed to check transitivity
+            foreach (var t_t in tuple_defs) {
+                instances_needed_per_type.Add(t_t.Id, 3);
+            }
+
+            foreach (var subject in query_subjects) {
+                var counter = new Counter<Identifier>();
+                var tf_args = subject.output_transformer.Signature.Args;
+                for (int i = 0; i < tf_args.Count; i++) {
+                    counter.Increment(tf_args[i].TypeId);
+                }
+                foreach (var id in subject.relevant_block_ids.Select(map_block_id).Select(j => tf_args[j].TypeId).Distinct()) {
+                    counter.Increment(id);
+                }
+                foreach (var kvp in counter) {
+                    if (instances_needed_per_type[kvp.Key] < kvp.Value) {
+                        instances_needed_per_type[kvp.Key] = kvp.Value;
                     }
                 }
             }
-            
-            return d_mono;
+
+            var instances = new Dictionary<Identifier, IReadOnlyList<Variable>>();
+
+            foreach (var kvp in instances_needed_per_type) {
+                instances.Add(kvp.Key, Enumerable.Range(0, kvp.Value).Select(i => new Variable($"{kvp.Key}_{i}", kvp.Key)).ToList());
+            }
+
+            var raw_outer_args = new List<FunctionArg>();
+            var body = new List<IStatement>();
+
+            foreach (var st in tuple_defs) {
+                var l = instances[st.Id];
+                foreach (var v in l) {
+                    st.PutConstructionForInputBlock(raw_outer_args, body, v);
+                }
+                body.AddRange(st.GetPartialOrderAssertions(l[0], l[1], l[2]));
+            }
+
+            var cost = new Variable("cost", IntType.Id);
+            body.Add(cost.Declare(Lit0));
+
+            var sd_dict = tuple_defs.ToDictionary(a => a.Id);
+
+            foreach (var a in query_subjects) {
+                body.AddRange(GetMonoAssertions(cost, sd_dict, instances, a));
+            }
+
+            body.Add(new MinimizeStatement(cost.Ref()));
+
+            return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), raw_outer_args), body);
+
+
         }
 
-        static (FunctionDefinition fdef, List<int> transformer_req_block_ids) GetMonoSubjectFunction(IReadOnlyList<StructType> struct_defs, Identifier fn_id, BlockSemantics sem) {
+
+        static MonoQueryBundle GetMonoSubjectFunction(IReadOnlyList<StructType> struct_defs, Identifier fn_id, BlockSemantics sem) {
             List<(FunctionArg, StructType)> pre_list = sem.BlockTypes.Select((bt, i) =>
-                 (new FunctionArg(new($"b{i}"), struct_defs[bt].Id, i == 1), struct_defs[bt])
+                 (new FunctionArg(new($"b{i}"), struct_defs[bt].Id), struct_defs[bt])
             ).ToList();
+
+            List<FunctionDefinition> preconditions = new();
 
             var ns = new FunctionNamespace2(pre_list);
 
@@ -367,7 +393,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             void assert_predicate(BlockAssert assert) {
-                steps.Add(new IfStatement(ns.Convert(assert.Expression), new ReturnStatement(new Literal(0))));
+                preconditions.Add(new(new(FunctionModifier.None, BitType.Id, new($"{fn_id}_pred_{preconditions.Count}"), args.SkipAt(1).ToList()),
+                    new ReturnStatement(ns.Convert(assert.Expression))
+                ));
+                // temp disabled
+                //steps.Add(new IfStatement(ns.Convert(assert.Expression), new ReturnStatement(new Literal(0))));
             }
 
             void assign_output_from_formulas(BlockAssign assign) {
@@ -383,13 +413,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
                     ).ToList()
                 );
 
-                steps.Add(args[assign.TargetBlockId].Assign(ret));
+                //steps.Add(args[assign.TargetBlockId].Assign(ret));
+                steps.Add(new ReturnStatement(ret));
             }
             void assign_output_from_block(int src_id) {
                 if (transformer_req_block_ids is not null) throw new InvalidOperationException();
                 transformer_req_block_ids = new();
 
-                steps.Add(args[1].Assign(args[src_id]));
+                //steps.Add(args[1].Assign(args[src_id]));
+                steps.Add(new ReturnStatement(args[src_id].Ref()));
             }
 
             foreach (var step in sem.Steps) {
@@ -398,7 +430,6 @@ namespace Semgus.OrderSynthesis.Subproblems {
                         switch (eval.OutputBlockId) {
                             case 0:
                                 throw new InvalidDataException();
-                                break;
                             case 1:
                                 assign_output_from_block(eval.InputBlockId);
                                 break;
@@ -417,11 +448,11 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
 
             // return true if reached end
-            steps.Add(new ReturnStatement(new Literal(1)));
+            //steps.Add(new ReturnStatement(new Literal(1)));
 
             Debug.Assert(transformer_req_block_ids is not null);
-
-            return (new(new(FunctionModifier.None, BitType.Id, fn_id, args), steps), transformer_req_block_ids);
+            var tf = new FunctionDefinition(new(FunctionModifier.None, /*BitType.Id*/ args[1].TypeId, fn_id, args.SkipAt(1).ToList()), steps);
+            return new(tf, preconditions, transformer_req_block_ids);
         }
 
 
@@ -507,53 +538,104 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), input_args), body);
         }
+        */
+        private static IEnumerable<IStatement> GetMonoAssertions(
+            Variable cost,
+            IReadOnlyDictionary<Identifier, StructType> types,
+            IReadOnlyDictionary<Identifier, IReadOnlyList<Variable>> instances,
+            MonoQueryBundle query
+        ) {
+            var sig = query.output_transformer.Signature;
 
-        private IEnumerable<IStatement> GetMonoAssertions(Variable n_mono, IReadOnlyDictionary<Identifier, Clasp> clasps, FunctionDefinition fn) {
-            var sig = fn.Signature;
-            if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
+            static int map_block_id(int i) => i > 1 ? i - 1 : i;
 
-            List<VariableRef> fixed_args = new();
+            foreach (var target_idx_raw in query.relevant_block_ids) {
+                var mono_flag = new Variable($"{query.output_transformer.Id}_mono_{target_idx_raw}", IntType.Id);
+                yield return mono_flag.Declare(new Hole(2,$"#MONO {query.output_transformer.Id}.{target_idx_raw}"));
 
-            {
-                Counter<Identifier> vcount = new();
-                foreach (var v in sig.Args) {
-                    var key = v.TypeId;
-                    fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
-                    vcount.Increment(key);
+                var target_idx = map_block_id(target_idx_raw);
+
+                var args = sig.Args;
+                var n = args.Count;
+
+                var target_st = types[args[target_idx].TypeId]; //types[args[target_idx].TypeId];
+                var output_st = types[sig.ReturnTypeId]; //types[args[1].TypeId];
+
+
+
+                //var a_out = new Variable($"{subject.Id}_out_{target_idx}_a", output_st.Id);
+                //var b_out = new Variable($"{subject.Id}_out_{target_idx}_b", output_st.Id);
+
+                //yield return a_out.Declare();
+                //yield return b_out.Declare();
+
+                var arg_list_a = new IExpression[n];
+                var arg_list_b = new IExpression[n];
+
+                var ctr = new Counter<Identifier>();
+
+                IExpression a_in = null, b_in = null;
+
+                for (int i = 0; i < n; i++) {
+                    //if (i == 1) {
+                    //    arg_list_a[i] = a_out.Ref();
+                    //    arg_list_b[i] = b_out.Ref();
+                    //} else {
+                        var u = args[i].TypeId;
+
+                        arg_list_a[i] = instances[u][ctr.Increment(u) - 1].Ref();
+                        if (i == target_idx) {
+                            arg_list_b[i] = instances[u][ctr.Increment(u) - 1].Ref();
+                            a_in = arg_list_a[i];
+                            b_in = arg_list_b[i];
+                        } else {
+                            arg_list_b[i] = arg_list_a[i];
+                        }
+                    //}
                 }
-            }
 
-            yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
+                Debug.Assert(a_in is not null && b_in is not null);
 
-            for (int i = 0; i < sig.Args.Count; i++) {
-                if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
+                IExpression inputs_ord = target_st.CompareId.Call(a_in, b_in);
+                var guard = query.preconditions.Count == 0 ? inputs_ord :
+                    Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(a_in), p.Call(b_in) }).Append(inputs_ord).ToList());
 
-                var alt_i = clasps[type_i.Id].Alternate;
+                var a_out = query.output_transformer.Call(arg_list_a);
+                var b_out = query.output_transformer.Call(arg_list_b);
 
-                List<VariableRef> alt_args = new(fixed_args);
-                alt_args[i] = alt_i.Ref();
+                    //Op.And.Of(
+                    //    target_st.CompareId.Call(a_in, b_in),
+                    //    subject.Call(arg_list_a),
+                    //    subject.Call(arg_list_b)
+                    //);
 
-                var mono_flag = new Variable($"mono_{fn.Id}_{i}", IntType.Id);
 
-                yield return new VariableDeclaration(mono_flag, new Hole($"#MONO {fn.Id}_{i}"));
                 yield return mono_flag.IfEq(Lit0,
-                    Assertion(
-                        type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
-                            .Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
-                    ),
-                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), Lit1))
+                    //Op.Or.Of(UnaryOp.Not.Of(guard), output_st.CompareId.Call(a_out, b_out)).Assert()
+                    Op.Or.Of(UnaryOp.Not.Of(guard), output_st.CompareId.Call(a_out,b_out)).Assert()
+                ).ElseIf(Op.Eq.Of(mono_flag.Ref(), Lit1),
+                    Op.Or.Of(UnaryOp.Not.Of(guard), output_st.CompareId.Call(b_out,a_out)).Assert()
+                //Op.Or.Of(UnaryOp.Not.Of(guard), output_st.CompareId.Call(b_out, a_out)).Assert()
+                ).Else(
+                    cost.Assign(Op.Plus.Of(cost.Ref(), Lit1))
                 );
-                yield return mono_flag.IfEq(Lit1,
-                    Assertion(
-                        type_i.CompareId.Call(fixed_args[i], alt_i.Ref())
-                            .Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
-                    ),
-                    n_mono.Assign(Op.Plus.Of(n_mono.Ref(), Lit1))
-                );
+
+                //yield return mono_flag.IfEq(Lit0,
+                //    new IfStatement(guard, output_st.EqId.Call(a_out, b_out).Assert())
+                //).ElseIf(Op.Eq.Of(mono_flag.Ref(), Lit1),
+                //    cost.Assign(Op.Plus.Of(cost.Ref(), Lit1)),
+                //        new IfStatement(guard, output_st.CompareId.Call(a_out, b_out).Assert())
+                //).ElseIf(Op.Eq.Of(mono_flag.Ref(), Lit2),
+                //    cost.Assign(Op.Plus.Of(cost.Ref(), Lit1)),
+                //    new IfStatement(guard, output_st.CompareId.Call(b_out, a_out).Assert())
+                //).Else(
+                //    cost.Assign(Op.Plus.Of(cost.Ref(), Lit2))
+                //);
             }
         }
 
-        public static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<RichTypedVariable> input_structs) {
+        /*
+         * public static (IReadOnlyList<FunctionArg> input_args, IReadOnlyList<IStatement> input_assembly_statements) GetMainInitContent(IReadOnlyList<RichTypedVariable> input_structs) {
             List<FunctionArg> input_args = new();
             List<IStatement> input_assembly_statements = new();
 
@@ -575,7 +657,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
         */
         public record Output(IReadOnlyList<StructType> StructDefs, IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<AnnotatedQueryFunction> QueryFunctions) {
-            public IEnumerable<(StructType st,FunctionDefinition cmp)> ZipComparisonsToTypes() {
+            public IEnumerable<(StructType st, FunctionDefinition cmp)> ZipComparisonsToTypes() {
 
                 var a = Comparisons.ToDictionary(c => c.Id);
 
@@ -616,8 +698,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
             Debug.Assert(mono.Count == QueryFunctions.Count, "Missing monotonicity labels for some semantics; halting");
 
             var annotated = QueryFunctions.Select(qf => {
-                var f = qf.fdef;
-                return new AnnotatedQueryFunction(f, QueryIdMap[f.Id],  qf.relevant_block_ids, mono[f.Id]);
+                var id = qf.output_transformer.Id;
+                return new AnnotatedQueryFunction(qf, QueryIdMap[id], mono[id]);
             }).ToList();
 
             //await Wsl.RunPython("parse-cmp.py", file_out.PathWsl, file_cmp.PathWsl);
@@ -643,7 +725,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         private IReadOnlyDictionary<Identifier, Monotonicity[]> InspectMonotonicities(FlexPath file_in, FlexPath file_holes) {
             var ser = new XmlSerializer(typeof(HolesXmlDoc));
 
-            IReadOnlyDictionary<int, (Identifier fn_id, int arg_id, bool is_inc_else_dec)> line_map;
+            IReadOnlyDictionary<int, (Identifier fn_id, int arg_id)> line_map;
 
             using (var sr = new StreamReader(file_in.PathWin)) {
                 line_map = ScanHoleLines(sr);
@@ -655,7 +737,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 doc = (HolesXmlDoc)ser.Deserialize(fs)!;
             }
 
-            return ExtractMonotonicities(doc, this.QueryFunctions.ToDictionary(a => a.fdef.Id, a=>a.fdef), line_map);
+            return ExtractMonotonicities(doc, this.QueryFunctions.ToDictionary(a => a.output_transformer.Id, a => a.output_transformer), line_map);
         }
 
         private void WriteSketchInputFile(FlexPath file_in) {
@@ -667,6 +749,6 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
         }
     }
-    internal record AnnotatedQueryFunction(FunctionDefinition fdef, (int prod_idx, int sem_idx) sem_addr, IReadOnlyList<int> relevant_block_ids, IReadOnlyList<Monotonicity> mono);
+    internal record AnnotatedQueryFunction(MonoQueryBundle query, (int prod_idx, int sem_idx) sem_addr, IReadOnlyList<Monotonicity> mono);
 
 }

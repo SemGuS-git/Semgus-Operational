@@ -42,6 +42,8 @@ namespace Semgus.SketchLang.Tests {
         }
 
 
+
+
         [DataTestMethod]
         [DataRow("33", 33)]
         [DataRow("0", 0)]
@@ -502,7 +504,7 @@ namespace Semgus.SketchLang.Tests {
 
             try {
                 AssertEmpty(SketchParser.InfixOperation.ParseMany(str));
-            } catch (ParseError) { } catch (InvalidTokenException) { } catch(InvalidCastException) { }
+            } catch (ParseError) { } catch (InvalidTokenException) { } catch (InvalidCastException) { }
         }
 
 
@@ -598,6 +600,19 @@ struct Out_0 {
 
 
 
+
+        /***** AssumeStatement ******/
+        static IEnumerable<object[]> AssumeStatementCases => new[] {
+            new object[] { "assume(1);", new AssumeStatement(Lit1) },
+            new object[] { "assume (1);",new AssumeStatement(Lit1) },
+            new object[] { "assume(1): \"abcdefg\";", new AssumeStatement(Lit1) }
+        };
+
+        [DataTestMethod]
+        [DynamicData(nameof(AssumeStatementCases))]
+        public void TestParseAssumeStatement(string str, object value) {
+            Assert.AreEqual(value, SketchParser.Statement.Parse(str));
+        }
 
 
         /***** ReturnStatement ******/
@@ -806,7 +821,7 @@ harness void main (int Out_0_s0_v0, int Out_0_s0_v1) {
                         FunctionModifier.Harness,
                         VoidType.Id,
                         new("main"),
-                        Arg("int","Out_0_s0_v0"), Arg("int", "Out_0_s0_v1") 
+                        Arg("int","Out_0_s0_v0"), Arg("int", "Out_0_s0_v1")
                     ),
                     VDec("Out_0","Out_0_s0",new StructNew(new("Out_0"),new[]{Var("v0").Assign(Var("Out_0_s0_v0")) })),
                     new ReturnStatement()

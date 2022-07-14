@@ -15,10 +15,6 @@
                 case 0:
                     lineReceiver.Add($"if({Condition}) {{ }}");
                     break;
-                case 1:
-                    lineReceiver.Add($"if({Condition}) ");
-                    BodyLhs[0].WriteInto(lineReceiver);
-                    break;
                 default:
                     lineReceiver.Add($"if({Condition}) {{");
                     lineReceiver.IndentIn();
@@ -33,7 +29,7 @@
             switch (BodyRhs.Count) {
                 case 0:
                     break;
-                case 1:
+                case 1 when BodyRhs[0] is IfStatement:
                     lineReceiver.Add("else ");
                     BodyRhs[0].WriteInto(lineReceiver);
                     break;

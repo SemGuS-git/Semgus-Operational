@@ -189,7 +189,7 @@ namespace Semgus.OrderSynthesis {
                 {
 
                     var step = new LatticeStep(rho.ZipComparisonsToTypes());
-                    theta = await step.Execute(dir.Append("step_4_lattice/"),reuse_previous);
+                    theta = await step.Execute(dir.Append("step_4_lattice/"),true);
 
 
                     //state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };

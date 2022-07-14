@@ -78,8 +78,8 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 Debug.Assert(f.Signature.ReturnTypeId == returnType.Id);
 
                 return stn.Args.Select((arg, i) => {
-                    var pa = (PropertyAccess)arg.Subject;
-                    Debug.Assert($"v{i}" == pa.Key.Name);
+                    var v = (VariableRef)arg.Subject;
+                    Debug.Assert($"v{i}" == v.TargetId.Name);
                     var etype = MapSketchType(returnType.Elements[i].TypeId);
                     return ToLatticeFnSexp(arg.Value, etype);
                 }).ToList();
@@ -151,7 +151,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             }
 
             private static void StringifyBlockExpr(IBlockExpression be, StringBuilder sb) {
-                switch(be) {
+                switch (be) {
                     case BlockExprLiteral lit:
                         sb.Append(lit.Value.ToString().ToLower()); // kludge
                         break;
@@ -165,7 +165,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                     case BlockExprCall call:
                         sb.Append('(');
                         sb.Append(call.FunctionName);
-                        foreach(var a in call.Args) {
+                        foreach (var a in call.Args) {
                             sb.Append(' ');
                             StringifyBlockExpr(a, sb);
                         }
@@ -174,7 +174,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 }
             }
 
-                static (string, TypeLabel) ToSmtOp(Op op) => op switch {
+            static (string, TypeLabel) ToSmtOp(Op op) => op switch {
                 Op.Eq => ("=", TypeLabel.Any),
                 Op.Neq => ("distinct", TypeLabel.Any),
                 Op.Plus => ("+", TypeLabel.Int),
@@ -196,15 +196,15 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             };
 
             internal static IEnumerable<string> StringifyConstFunction(FunctionDefinition fdef, StructType type) {
-                if (fdef.Body.Count == 0 && fdef.Body[0] is ReturnStatement ret && ret.Expr is StructNew sn && sn.Args.Count == type.Elements.Count) {
+                if (fdef.Body.Count != 1 ||
+                    fdef.Body[0] is not ReturnStatement ret ||
+                    ret.Expr is not StructNew sn ||
+                    sn.Args.Count != type.Elements.Count
+                ) throw new ArgumentException();
 
-                    for (var i = 0; i < sn.Args.Count; i++) {
-                        Debug.Assert(sn.Args[i].Subject is VariableRef v && v.TargetId.Name == $"v{i}");
-                        yield return ToLatticeFnSexp(sn.Args[i].Value, MapSketchType(type.Elements[i].TypeId));
-                    }
-
-                } else {
-                    throw new ArgumentException();
+                for (var i = 0; i < sn.Args.Count; i++) {
+                    Debug.Assert(sn.Args[i].Subject is VariableRef v && v.TargetId.Name == $"v{i}");
+                    yield return ToLatticeFnSexp(sn.Args[i].Value, MapSketchType(type.Elements[i].TypeId));
                 }
             }
         }
@@ -217,11 +217,9 @@ namespace Semgus.OrderSynthesis.OutputFormat {
 
                 // members
                 writer.WriteStartArray("members");
-
                 foreach (var a in value.type.Elements) {
                     writer.WriteStringValue(SexpHelper.GetTypeName(a));
                 }
-
                 writer.WriteEndArray();
 
                 // cmp
@@ -231,7 +229,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteStartArray("top");
                 SexpHelper.StringifyConstFunction(value.top, value.type).ToList().ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
-                
+
                 // bot
                 writer.WriteStartArray("bot");
                 SexpHelper.StringifyConstFunction(value.bot, value.type).ToList().ForEach(writer.WriteStringValue);
@@ -261,84 +259,123 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteString("name", value.Name);
                 writer.WriteStartArray("semantics");
 
-                foreach(var sem in value.Semantics) {
+                foreach (var sem in value.Semantics) {
                     Converters.Instance.ToSemFmt.Write(writer, sem, options);
                 }
 
                 writer.WriteEndArray();
 
+                writer.WriteEndObject();
             }
         );
         public DelegateWriteOnlyConverter<BlockSemantics> ToSemFmt { get; } = new(
             (writer, value, options) => {
                 writer.WriteStartObject();
                 writer.WriteStartArray("block_types");
-
-                foreach (var b in value.BlockTypes) {
-                    writer.WriteNumberValue(b);
-                }
-
+                foreach (var b in value.BlockTypes) writer.WriteNumberValue(b);
                 writer.WriteEndArray();
 
                 writer.WriteStartArray("steps");
-
-                foreach(var step in value.Steps) {
-                    writer.WriteStartObject();
-                    switch(step) {
+                foreach (var step in value.Steps) {
+                    switch (step) {
                         case BlockEval eval:
-                            writer.WriteString("type", "eval");
-                            writer.WriteNumber("term", eval.TermIndex);
-                            writer.WriteNumber("input", eval.InputBlockId);
-                            writer.WriteNumber("output", eval.OutputBlockId);
+                            PutStep(writer, eval);
                             break;
                         case BlockAssert assert:
-                            writer.WriteString("type", "assert");
-                            writer.WriteStartArray("required");
-                            foreach(var a in assert.RequiredBlockId) {
-                                writer.WriteNumberValue(a);
-                            }
-                            writer.WriteEndArray();
-                            writer.WriteStartArray("monotonicities");
-                            foreach (var a in assert.MonoLabels) {
-                                writer.WriteStringValue(GetPrintName(a));
-                            }
-                            writer.WriteEndArray();
-
-                            writer.WriteString("predicate", SexpHelper.StringifyBlockExpr(assert.Expression));
+                            PutStep(writer, assert);
                             break;
                         case BlockAssign assign:
-                            writer.WriteString("type", "set");
-
-                            writer.WriteNumber("target", assign.TargetBlockId);
-
-                            writer.WriteStartArray("required");
-                            foreach (var a in assign.RequiredBlocks) {
-                                writer.WriteNumberValue(a);
-                            }
-                            writer.WriteEndArray();
-                            writer.WriteStartArray("monotonicities");
-                            foreach (var a in assign.Monotonicities) {
-                                writer.WriteStringValue(GetPrintName(a));
-                            }
-                            writer.WriteEndArray();
-
-                            writer.WriteStartArray("expressions");
-                            foreach(var e in assign.Exprs) {
-                                writer.WriteStringValue(SexpHelper.StringifyBlockExpr(e));
-                            }
-                            writer.WriteEndArray();
+                            PutStep(writer, assign);
                             break;
                     }
-                    writer.WriteEndObject();
                 }
-
                 writer.WriteEndArray();
                 writer.WriteEndObject();
             }
         );
 
+        private static void PutStep(Utf8JsonWriter writer, BlockAssign assign) {
+            writer.WriteStartObject();
+            writer.WriteString("type", "set");
+
+            writer.WriteNumber("target", assign.TargetBlockId);
+
+            writer.WriteStartArray("required");
+            foreach (var a in assign.RequiredBlocks) writer.WriteNumberValue(a);
+            writer.WriteEndArray();
+
+            writer.WriteStartArray("monotonicities");
+            foreach (var a in assign.Monotonicities) writer.WriteStringValue(GetPrintName(a));
+            writer.WriteEndArray();
+
+            writer.WriteStartArray("expressions");
+            foreach (var e in assign.Exprs) writer.WriteStringValue(SexpHelper.StringifyBlockExpr(e));
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        private static void PutStep(Utf8JsonWriter writer, BlockAssert assert) {
+            writer.WriteStartObject();
+
+            writer.WriteString("type", "assert");
+            writer.WriteStartArray("required");
+            foreach (var a in assert.RequiredBlockId) writer.WriteNumberValue(a);
+            writer.WriteEndArray();
+            writer.WriteStartArray("monotonicities");
+            foreach (var a in assert.MonoLabels) writer.WriteStringValue(GetPrintName(a));
+            writer.WriteEndArray();
+
+            writer.WriteString("predicate", SexpHelper.StringifyBlockExpr(assert.Expression));
+            writer.WriteEndObject();
+        }
+
+        private static void PutStep(Utf8JsonWriter writer, BlockEval eval) {
+            writer.WriteStartObject();
+            writer.WriteString("type", "eval");
+            writer.WriteNumber("term", eval.TermIndex);
+            writer.WriteNumber("input", eval.InputBlockId);
+            writer.WriteNumber("output", eval.OutputBlockId);
+            writer.WriteEndObject();
+        }
+
+        public DelegateWriteOnlyConverter<(FlatNt, LatticeDefs)> ToNtFmt { get; } = new(
+            (writer, value, options) => {
+                var (nt, lattice) = value;
+
+                writer.WriteStartObject();
+                writer.WriteString("name", nt.Name);
+                writer.WriteNumber("term_type", nt.TermType);
+                writer.WriteStartArray("productions");
+
+                foreach (var prod in nt.Productions) {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("prod_idx", prod.prod_idx);
+                    writer.WriteStartArray("child_nts");
+                    foreach (var ch in prod.child_nt_ids) writer.WriteNumberValue(ch);
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+
+                writer.WriteStartArray("bounds_universal");
+
+                writer.WriteStartArray();
+                SexpHelper.StringifyConstFunction(lattice.bot, lattice.type).ToList().ForEach(writer.WriteStringValue);
+                writer.WriteEndArray();
+
+                writer.WriteStartArray();
+                SexpHelper.StringifyConstFunction(lattice.top, lattice.type).ToList().ForEach(writer.WriteStringValue);
+                writer.WriteEndArray();
+
+                writer.WriteEndArray();
+
+                writer.WriteEndObject();
+            }
+        );
+
         private static string GetPrintName(Monotonicity a) => a switch {
-            Monotonicity.None => "none", 
+            Monotonicity.None => "none",
             Monotonicity.Increasing => "increasing",
             Monotonicity.Decreasing => "decreasing",
             Monotonicity.Constant => "constant",
@@ -347,19 +384,32 @@ namespace Semgus.OrderSynthesis.OutputFormat {
         public DelegateWriteOnlyConverter<(InitialStuff, IReadOnlyList<LatticeDefs>)> ToOutputDocument { get; } = new DelegateWriteOnlyConverter<(InitialStuff, IReadOnlyList<LatticeDefs>)>(
 
             (writer, value, options) => {
+                var (lang, lattices) = value;
+
                 writer.WriteStartObject();
+
                 writer.WriteStartArray("block_types");
-                foreach(var lattice in value.Item2) Converters.Instance.ToBlockTypes.Write(writer, lattice, options);
+                foreach (var lattice in lattices) Converters.Instance.ToBlockTypes.Write(writer, lattice, options);
                 writer.WriteEndArray();
 
                 writer.WriteStartArray("productions");
+                foreach (var prod in lang.Productions) Converters.Instance.ToProdFmt.Write(writer, prod, options);
+                writer.WriteEndArray();
 
+                writer.WriteNumber("start_symbol", 0);
+
+                writer.WriteStartArray("nonterminals");
+                foreach (var nt in lang.Nonterminals) Converters.Instance.ToNtFmt.Write(writer, (nt, lattices[lang.TypeHelper.GetOutputBlockType(nt.TermType).Id]), options);
+                writer.WriteEndArray();
+
+                writer.WriteEndObject();
             }
         );
 
         public static string Serialize(InitialStuff a, IReadOnlyList<LatticeDefs> b) {
             var opt = new JsonSerializerOptions() {
-                PropertyNamingPolicy = new SnakeCaseNamingPolicy()
+                PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols
             };
             opt.Converters.Add(Instance.ToOutputDocument);
             return JsonSerializer.Serialize((a, b), opt);

@@ -63,10 +63,11 @@ namespace Semgus.MiniParser {
         }
 
         bool ReadToken(ref IToken token)
-            => ReadTrieMember (ref token)
+            => ReadTrieMember(ref token)
             || ReadComment(ref token)
             || ReadNumber(ref token)
-            || ReadWord(ref token);
+            || ReadWord(ref token)
+            || ReadString(ref token);
 
 
         bool ReadTrieMember(ref IToken token) {
@@ -180,6 +181,28 @@ namespace Semgus.MiniParser {
             }
 
             cursor = t;
+            return true;
+        }
+
+        private bool ReadString(ref IToken token) {
+            char head = src[cursor];
+
+            if (head != '"') return false;
+
+            cursor += 1;
+
+            int t = cursor;
+
+            while (++t < n && src[t] != '"') {
+            
+            }
+            if (t >= n) throw new InvalidTokenException(src, cursor, t, "String literal not closed");
+
+            var str = src[cursor..t];
+
+            token = new TextInQuotes(str);
+
+            cursor = t + 1;
             return true;
         }
     }

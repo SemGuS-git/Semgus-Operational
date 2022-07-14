@@ -49,13 +49,18 @@
               (E.Sem et1 x y r1)
               (E.Sem et2 x y r2)
               (= r (+ r1 r2)))))
-        (($ite bt1 etc eta)
-         (exists ((rb Bool) (rc Int) (ra Int))
-             (and
-              (B.Sem bt1 x y rb)
-              (E.Sem etc x y rc)
-              (E.Sem eta x y ra)
-              (= r(ite rb rc ra)))))))
+        (($ite t1 t2 t3)
+            (exists ((b Bool)) (and
+                (B.Sem t1 x y b)
+                (= b true)
+                (E.Sem t2 x y r)
+            ))
+            (exists ((b Bool)) (and
+                (B.Sem t1 x y b)
+                (= b false)
+                (E.Sem t3 x y r)
+            ))
+        )))
 
     :input (x y) :output (r))
 

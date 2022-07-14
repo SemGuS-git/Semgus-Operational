@@ -46,6 +46,7 @@ namespace Semgus.MiniParser {
             HoleSymbol hole = new();
             LiteralSymbol literal = new();
             IdentifierSymbol identifier = new();
+            LiteralStringSymbol literalString = new();
 
             var expression = new Placeholder();
 
@@ -64,7 +65,7 @@ namespace Semgus.MiniParser {
 
             assignable.Name = "assignable";
 
-            var unit = literal | assignable | hole;
+            var unit = literal | assignable | hole; // literal strings currently not supported as exprs
 
             var call = (identifier + "(" + (expression + ("," + expression).Star()).Maybe() + ")")
                 .Transform(ctx => new FunctionEval(ctx.Take<Identifier>(), ctx.TakeStar<IExpression>().ToList()));
@@ -132,11 +133,20 @@ namespace Semgus.MiniParser {
                 });
             def_struct.Name = "def_struct";
 
-            var exclaim = ((Kw("assert") | "minimize") + expression)
-                .Transform(ctx => ctx.Take<KeywordInstance>().Value switch {
-                    "assert" => new AssertStatement(ctx.Take<IExpression>()),
-                    "minimize" => new MinimizeStatement(ctx.Take<IExpression>()),
-                    _ => throw new Exception()
+            var exclaim = ((Kw("assert") | "minimize" | "assume") + expression + (":" + literalString).Maybe())
+                .Transform(ctx => {
+                    var kw = ctx.Take<KeywordInstance>().Value;
+                    switch (kw) {
+                        case "assert": return new AssertStatement(ctx.Take<IExpression>());
+                        case "minimize": return new MinimizeStatement(ctx.Take<IExpression>());
+                        case "assume":
+                            var pred = ctx.Take<IExpression>();
+                            if (ctx.TrySkipKeyword(":")) {
+                                ctx.Skip<LiteralString>();
+                            }
+                            return new AssumeStatement(pred);
+                        default: throw new Exception();
+                    };
                 });
 
             var returns = ("return" + expression.Maybe())

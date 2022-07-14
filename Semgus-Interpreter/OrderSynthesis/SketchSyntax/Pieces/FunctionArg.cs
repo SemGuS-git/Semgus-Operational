@@ -7,6 +7,6 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
         public Identifier Id => Variable.Id;
         public Identifier TypeId => Variable.TypeId;
 
-        public override string ToString() => IsRef ? $"ref {Variable}" : Variable.ToString();
+        public override string ToString() => Variable.Id.ToString();
     }
 }
