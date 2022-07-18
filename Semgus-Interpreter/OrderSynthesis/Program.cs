@@ -23,14 +23,16 @@ namespace Semgus.OrderSynthesis {
             var nex = new List<string>();
 
             foreach (var target in new[] {
-              //  "impv-demo.sl",
-               "max2-exp.sl",
+                //"sum-by-while.sl",
+
+                //"impv-demo.sl",
+               //"max2-exp.sl",
                //"max3-exp.sl",
-                //"regex4-simple.sl",
-                //"regex4-either-pair.sl",
+               // "regex4-simple.sl",
+               // "regex4-either-pair.sl",
                // "polynomial.sl",
-                //"regex6-padded-cycle.sl",
-                //"regex8-aa.sl"
+               // "regex6-padded-cycle.sl",
+               // "regex8-aa.sl"
             }) {
                 var file = head + target;
                 Debug.Assert(File.Exists(file), "Missing input file {0}", file);
@@ -59,20 +61,46 @@ namespace Semgus.OrderSynthesis {
             FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{fname}/");
 
             var items = ParseUtil.TypicalItems.Acquire(file); // May throw
-            var abs_sem_raw = InitialStuff.From(items.Grammar, items.Library); // May throw
 
-            var (cores,lattices) = await RunPipeline(dir, abs_sem_raw, false);
+
+
+            var start_symbol = items.Constraint.StartSymbol;
+            Debug.Assert(items.Grammar.Nonterminals.Contains(start_symbol));
+
+            var g_idx = GrammarIndexing.From(start_symbol, items.Grammar);
+
+            var abs_sem_raw = TupleLibrary.From(g_idx, items.Grammar.Productions, items.Library); // May throw
+
+
+            bool reuse_prev = false;
+            if (!reuse_prev) CleanPreviousOutput(dir);
+            PrepOutputDirectory(dir);
+
+
+            {
+                var json_file = dir.Append("concrete_sem.json");
+                File.WriteAllText(json_file.PathWin, OutputFormat.ConcConverters.Serialize(items.Library));
+                Console.WriteLine("--- Wrote conc file ---");
+            }
+            {
+                var json_file = dir.Append("specification.json");
+                File.WriteAllText(json_file.PathWin, OutputFormat.SpecConverters.Serialize(g_idx,items.Grammar.Productions,items.Constraint));
+                Console.WriteLine("--- Wrote spec file ---");
+            }
+
+            var (cores,lattices) = await RunPipeline(dir, items.Library, abs_sem_raw, reuse_prev);
 
             // apply monotonicities to abstract sem
-            InitialStuff abs_sem = abs_sem_raw.WithMonotonicitiesFrom(cores.QueryFunctions);
+            TupleLibrary abs_sem = abs_sem_raw.WithMonotonicitiesFrom(cores.QueryFunctions);
 
 
             Console.WriteLine("--- Abs sem monotonized ---");
 
-            var json_file = dir.Append("result.json");
-
-            File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
-
+            {
+                var json_file = dir.Append("abstract_sem.json");
+                File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
+                Console.WriteLine("--- Wrote abs file ---");
+            }
 
             //var cfg = new ConfigParameters {
             //    CostFunction = TermCostFunction.Size,
@@ -121,30 +149,20 @@ namespace Semgus.OrderSynthesis {
             Console.WriteLine("--- Did synth ---");
         }
 
-        static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InitialStuff abs_sem_raw, bool reuse_previous = false) {
-            if (!reuse_previous) {
-                if (Directory.Exists(dir.PathWin)) {
-                    Directory.Delete(dir.PathWin, true);
-                }
-                Directory.CreateDirectory(dir.PathWin);
-            } else {
-                //if (!Directory.Exists(dir.PathWin)) throw new DirectoryNotFoundException(dir.PathWin);
-                //var temp_storage_dir = dir.Append("../_temp/");
-                //if (Directory.Exists(temp_storage_dir.PathWin)) throw new InvalidOperationException($"There's already a directory in our temp location {temp_storage_dir.PathWin}");
-                //Directory.CreateDirectory(temp_storage_dir.PathWin);
-
-                //var target_dir = dir.Append("step_1_mono/");
-                //var subtargets = new[] { "input.sk", "result.sk", "result.holes.xml" };
-                //foreach (var s in subtargets) {
-                //    File.Copy(target_dir.Append(s).PathWin, temp_storage_dir.Append(s).PathWin);
-                //}
-                //Directory.Delete(dir.PathWin, true);
-                //Directory.CreateDirectory(target_dir.PathWin);
-                //foreach (var s in subtargets) {
-                //    File.Copy(temp_storage_dir.Append(s).PathWin, target_dir.Append(s).PathWin);
-                //}
-                //Directory.Delete(temp_storage_dir.PathWin, true);
+        static void CleanPreviousOutput(FlexPath dir) {
+            if (Directory.Exists(dir.PathWin)) {
+                Directory.Delete(dir.PathWin, true);
             }
+        }
+
+        static void PrepOutputDirectory(FlexPath dir) {
+            if (!Directory.Exists(dir.PathWin)) {
+                Directory.CreateDirectory(dir.PathWin);
+            }
+        }
+
+        static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InterpretationLibrary conc, TupleLibrary abs_sem_raw, bool reuse_previous = false) {
+
             PipelineState? state = null;
 
             try {
@@ -189,7 +207,7 @@ namespace Semgus.OrderSynthesis {
                 {
 
                     var step = new LatticeStep(rho.ZipComparisonsToTypes());
-                    theta = await step.Execute(dir.Append("step_4_lattice/"),true);
+                    theta = await step.Execute(dir.Append("step_4_lattice/"),false);
 
 
                     //state = state with { Reached = PipelineState.Step.Lattice, Lattices = result.Lattices };

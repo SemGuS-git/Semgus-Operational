@@ -107,7 +107,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         IReadOnlyDictionary<Identifier, (int prod_idx, int sem_idx)> QueryIdMap { get; }
 
-        public MonotonicityStep(InitialStuff stuff) {
+        public MonotonicityStep(TupleLibrary stuff) {
             var struct_defs = stuff.TypeHelper.BlockTypes.Select(bt =>
                 new StructType(
                     new($"bt_{bt.Id}"),

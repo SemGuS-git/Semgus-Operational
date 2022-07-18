@@ -11,6 +11,9 @@ using Semgus.OrderSynthesis.Subproblems;
 using System.Diagnostics;
 using Semgus.MiniParser;
 using Semgus.OrderSynthesis.IntervalSemantics;
+using Semgus.Operational;
+using Semgus.Constraints;
+using Semgus.Util;
 
 namespace Semgus.OrderSynthesis.OutputFormat {
     public class SnakeCaseNamingPolicy : JsonNamingPolicy {
@@ -38,9 +41,251 @@ namespace Semgus.OrderSynthesis.OutputFormat {
         }
     }
 
+    internal class SpecConverters {
+        public static SpecConverters Instance { get; } = new();
 
+        internal static string Serialize(GrammarIndexing g_idx, DictOfList<NtSymbol,NonterminalProduction> productions, InductiveConstraint constraint) {
+            var opt = new JsonSerializerOptions() {
+                PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols
+            };
+            opt.Converters.Add(Instance.ToOutputDoc);
+            return JsonSerializer.Serialize((g_idx,productions,constraint), opt);
+        }
+
+
+        public DelegateWriteOnlyConverter<(
+            GrammarIndexing g_idx,
+            DictOfList<NtSymbol, NonterminalProduction> productions, 
+            InductiveConstraint constraint
+        )> ToOutputDoc { get; } = new(
+            (writer, value, options) => {
+                var (g_idx,productions, constraint) = value;
+
+                var representative = productions[g_idx.OrderedNonterminals[0]][0].Production;
+
+                var labels = new string[representative.InputVariables.Count + representative.OutputVariables.Count];
+                foreach (var a in representative.InputVariables) labels[a.Index] = "in";
+                foreach (var a in representative.OutputVariables) labels[a.Index] = "out";
+
+                writer.WriteStartObject();
+                writer.WriteStartArray("arg_labels");
+                foreach (var a in labels) writer.WriteStringValue(a);
+                writer.WriteEndArray();
+
+                writer.WriteStartArray("examples");
+                foreach(var e in constraint.Examples) {
+                    writer.WriteStringValue(string.Join(' ', e.Values).ToLower());
+                }
+                writer.WriteEndArray();
+
+                writer.WriteNumber("start_symbol", 0);
+
+                writer.WriteStartArray("nonterminals");
+                for (int i = 0; i < g_idx.OrderedNonterminals.Count; i++) {
+                    var nt = g_idx.OrderedNonterminals[i];
+                    SpecConverters.Instance.ToNtFmt.Write(writer, (nt,productions[nt], g_idx), options);
+
+
+                }
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+        );
+
+        public DelegateWriteOnlyConverter<(NtSymbol nt, IReadOnlyList<NonterminalProduction> prods, GrammarIndexing g_idx)> ToNtFmt { get; } = new(
+            (writer, value, options) => {
+                var (nt, prods, g_idx) = value;
+
+                writer.WriteStartObject();
+                writer.WriteString("name", nt.Name);
+                writer.WriteNumber("term_type", g_idx.GetTermTypeId(nt));
+                writer.WriteStartArray("productions");
+
+                foreach (var prod in prods) {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("prod_id", prod.Production.SequenceNumber);
+                    writer.WriteStartArray("child_nts");
+                    foreach (var ch in prod.ChildNonterminals) writer.WriteNumberValue(g_idx.NtIds[ch]);
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+
+                writer.WriteEndObject();
+            }
+        );
+
+    }
+
+    internal class ConcConverters {
+        public static ConcConverters Instance { get; } = new();
+
+
+        public DelegateWriteOnlyConverter<InterpretationLibrary> ToOutputDoc { get; } = new(
+            (writer, value, options) => {
+                writer.WriteStartObject();
+
+
+
+                writer.WriteStartArray("productions");
+                foreach (var prod in value.Productions) {
+                    writer.WriteStartObject();
+                    writer.WriteString("name", prod.SyntaxConstructor.Operator.AsString());
+                    writer.WriteNumber("id", prod.SequenceNumber);
+                    writer.WriteStartArray("semantics");
+
+                    foreach (var sem in prod.Semantics) {
+                        writer.WriteStartObject();
+                        writer.WriteStartArray("steps");
+
+                        foreach (var step in sem.Steps) {
+                            writer.WriteStringValue(ToSexp(step));
+                        }
+
+                        writer.WriteEndArray();
+                        writer.WriteEndObject();
+                    }
+
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+
+                writer.WriteEndObject();
+            }
+        );
+
+        //public DelegateWriteOnlyConverter<InterpretationGrammar> Tox { get; } = new(
+        //    (writer, value, options) => {
+        //        writer.WriteStartObject();
+
+
+
+        //        writer.WriteStartArray("productions");
+        //        foreach (var kvp in value.Productions) {
+        //            writer.WriteStartObject();
+        //            writer.WriteString("name", prod.ToString());
+        //            writer.WriteStartArray("semantics");
+
+        //            foreach (var sem in prod.Semantics) {
+        //                writer.WriteStartObject();
+        //                writer.WriteStartArray("steps");
+
+        //                foreach (var step in sem.Steps) {
+        //                    writer.WriteStringValue(ToSexp(step));
+        //                }
+
+        //                writer.WriteEndArray();
+        //                writer.WriteEndObject();
+        //            }
+
+        //            writer.WriteEndArray();
+        //            writer.WriteEndObject();
+        //        }
+
+        //        writer.WriteEndArray();
+
+        //        writer.WriteEndObject();
+        //    }
+        //);
+
+        internal static string Serialize(InterpretationLibrary library) {
+            var opt = new JsonSerializerOptions() {
+                PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols
+            };
+            opt.Converters.Add(Instance.ToOutputDoc);
+            return JsonSerializer.Serialize(library, opt);
+        }
+
+        private record Wrap(string head, List<object> tail) {
+            public override string ToString() {
+                var sb = new StringBuilder();
+                sb.Append('(');
+                sb.Append(head);
+                foreach (var a in tail) {
+                    sb.Append(' ');
+                    if (a is ISmtLibExpression expr) {
+                        Stringify(expr, sb);
+                    } else {
+                        sb.Append(a.ToString());
+                    }
+                }
+                sb.Append(')');
+                return sb.ToString();
+            }
+        }
+
+        private static string Stringify(ISmtLibExpression expr) {
+            var sb = new StringBuilder();
+            Stringify(expr, sb);
+            return sb.ToString();
+        }
+
+        private static void Stringify(ISmtLibExpression expr, StringBuilder sb) {
+            switch (expr) {
+                case VariableEvalExpression vee:
+                    sb.Append(Encode(vee.Variable));
+                    return;
+                case LiteralExpression lit:
+                    sb.Append(lit.BoxedValue.ToString());
+                    return;
+                case FunctionCallExpression fce:
+                    if (fce.Args.Count == 0) {
+                        sb.Append(fce.Function.Name);
+                        return;
+                    } else {
+                        sb.Append('(');
+                        sb.Append(fce.Function.Name);
+                        foreach (var a in fce.Args) {
+                            sb.Append(' ');
+                            Stringify(a, sb);
+                        }
+                        sb.Append(')');
+                        return;
+                    }
+                default:
+                    throw new NotSupportedException();
+            }
+        }
+
+        private static string Encode(VariableInfo vee) {
+            return $"{vee.Name}@{vee.Index}";
+        }
+
+        private static string ToSexp(IInterpretationStep step) {
+            switch (step) {
+                case AssignmentFromLocalFormula assign:
+                    return new Wrap("SET", new() { Encode(assign.ResultVar), assign.Expression }).ToString();
+                case TermEvaluation eval:
+                    return new Wrap("EVAL",
+                        eval.Args.Select(a =>
+                            (object)new Wrap(a.isOutput ? ":out" : ":in", new() { Encode(a.info) })
+                        ).Prepend(eval.Term.Index).ToList()
+                    ).ToString();
+                case ConditionalAssertion assertion:
+                    return new Wrap("ASSERT", new() { assertion.Expression }).ToString();
+                default:
+                    throw new NotSupportedException();
+            }
+        }
+    }
     internal class Converters {
         public static Converters Instance { get; } = new();
+
+        private ITheoryImplementation SmtTheory { get; } = MakeTheory();
+
+        static ITheoryImplementation MakeTheory() {
+            var smt = new Model.Smt.SmtContext();
+            var sortHelper = new SortHelper(smt.Theories.ToList());
+            return new UnionTheoryImpl(new ITheoryImplementation[] {
+                new SmtCoreTheoryImpl(sortHelper),
+                new SmtIntsTheoryImpl(sortHelper),
+            });
+        }
 
         static class SexpHelper {
             public static string GetTypeName(Variable v) {
@@ -174,7 +419,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 }
             }
 
-            static (string, TypeLabel) ToSmtOp(Op op) => op switch {
+            static (string symbol, TypeLabel arg_type) ToSmtOp(Op op) => op switch {
                 Op.Eq => ("=", TypeLabel.Any),
                 Op.Neq => ("distinct", TypeLabel.Any),
                 Op.Plus => ("+", TypeLabel.Int),
@@ -204,45 +449,88 @@ namespace Semgus.OrderSynthesis.OutputFormat {
 
                 for (var i = 0; i < sn.Args.Count; i++) {
                     Debug.Assert(sn.Args[i].Subject is VariableRef v && v.TargetId.Name == $"v{i}");
-                    yield return ToLatticeFnSexp(sn.Args[i].Value, MapSketchType(type.Elements[i].TypeId));
+                    yield return FlattenToLiteral(sn.Args[i].Value, MapSketchType(type.Elements[i].TypeId));
                 }
             }
-        }
 
+            private static string FlattenToLiteral(IExpression expr, TypeLabel typeLabel) {
+                return EvalConstExpr(expr, typeLabel).ToString().ToLower();
+            }
+
+            private static object EvalConstExpr(IExpression expr, TypeLabel typeLabel) {
+                switch (expr) {
+                    case Literal lit:
+                        return typeLabel switch {
+                            TypeLabel.Int or TypeLabel.Any => lit.Value,
+                            TypeLabel.Bool => lit.Value == 0 ? false : true,
+                            _ => throw new NotSupportedException(),
+                        };
+                    case UnaryOperation unOp: {
+                            var (_, arg_type) = ToSmtOp(unOp.Op);
+                            var value = EvalConstExpr(unOp.Operand, arg_type);
+                            return unOp.Op switch {
+                                UnaryOp.Not => !((bool)value),
+                                UnaryOp.Minus => -((int)value),
+                            };
+                        }
+                    case InfixOperation infixOp: {
+                            var (_, arg_type) = ToSmtOp(infixOp.Op);
+                            var values = infixOp.Operands.Select(arg => EvalConstExpr(arg, arg_type)).ToList();
+                            return infixOp.Op switch {
+                                Op.Eq => values.Distinct().Count() == 1,
+                                Op.Neq => values.Distinct().Count() > 1,
+                                Op.Plus => values.Cast<int>().Sum(),
+                                Op.Minus => values.Count switch {
+                                    1 => -((int)values[0]),
+                                    2 => ((int)values[1]) - ((int)values[0]),
+                                    _ => throw new ArgumentException(),
+                                },
+                                Op.Or => values.Cast<bool>().Any(),
+                                Op.And => values.Cast<bool>().All(b => b),
+                                _ => throw new NotSupportedException(),
+                            };
+                        }
+                    case Ternary tern: {
+                            return EvalConstExpr(((bool)EvalConstExpr(tern.Cond, TypeLabel.Bool)) ? tern.ValIf : tern.ValElse, TypeLabel.Any);
+                        }
+                    default: throw new NotSupportedException();
+                };
+            }
+        }
 
         public DelegateWriteOnlyConverter<LatticeDefs> ToBlockTypes { get; } = new(
             (writer, value, options) => {
 
                 writer.WriteStartObject();
 
-                // members
-                writer.WriteStartArray("members");
+                    // members
+                    writer.WriteStartArray("members");
                 foreach (var a in value.type.Elements) {
                     writer.WriteStringValue(SexpHelper.GetTypeName(a));
                 }
                 writer.WriteEndArray();
 
-                // cmp
-                writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(value.compare));
+                    // cmp
+                    writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(value.compare));
 
-                // top
-                writer.WriteStartArray("top");
+                    // top
+                    writer.WriteStartArray("top");
                 SexpHelper.StringifyConstFunction(value.top, value.type).ToList().ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
-                // bot
-                writer.WriteStartArray("bot");
+                    // bot
+                    writer.WriteStartArray("bot");
                 SexpHelper.StringifyConstFunction(value.bot, value.type).ToList().ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
 
-                // join_incomparable
-                writer.WriteStartArray("join_incomparable");
+                    // join_incomparable
+                    writer.WriteStartArray("join_incomparable");
                 SexpHelper.ToLatticeFnSexpGroup(value.join_incomparable, value.type).ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
-                // meet_incomparable
-                writer.WriteStartArray("meet_incomparable");
+                    // meet_incomparable
+                    writer.WriteStartArray("meet_incomparable");
                 SexpHelper.ToLatticeFnSexpGroup(value.meet_incomparable, value.type).ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
@@ -257,6 +545,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteStartObject();
                 writer.WriteNumber("term_type", value.TermTypeId);
                 writer.WriteString("name", value.Name);
+                writer.WriteNumber("id", value.SequenceNumber);
                 writer.WriteStartArray("semantics");
 
                 foreach (var sem in value.Semantics) {
@@ -268,6 +557,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteEndObject();
             }
         );
+
         public DelegateWriteOnlyConverter<BlockSemantics> ToSemFmt { get; } = new(
             (writer, value, options) => {
                 writer.WriteStartObject();
@@ -344,19 +634,6 @@ namespace Semgus.OrderSynthesis.OutputFormat {
 
                 writer.WriteStartObject();
                 writer.WriteString("name", nt.Name);
-                writer.WriteNumber("term_type", nt.TermType);
-                writer.WriteStartArray("productions");
-
-                foreach (var prod in nt.Productions) {
-                    writer.WriteStartObject();
-                    writer.WriteNumber("prod_idx", prod.prod_idx);
-                    writer.WriteStartArray("child_nts");
-                    foreach (var ch in prod.child_nt_ids) writer.WriteNumberValue(ch);
-                    writer.WriteEndArray();
-                    writer.WriteEndObject();
-                }
-
-                writer.WriteEndArray();
 
                 writer.WriteStartArray("bounds_universal");
 
@@ -381,7 +658,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             Monotonicity.Constant => "constant",
         };
 
-        public DelegateWriteOnlyConverter<(InitialStuff, IReadOnlyList<LatticeDefs>)> ToOutputDocument { get; } = new DelegateWriteOnlyConverter<(InitialStuff, IReadOnlyList<LatticeDefs>)>(
+        public DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<LatticeDefs>)> ToOutputDocument { get; } = new DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<LatticeDefs>)>(
 
             (writer, value, options) => {
                 var (lang, lattices) = value;
@@ -396,8 +673,6 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 foreach (var prod in lang.Productions) Converters.Instance.ToProdFmt.Write(writer, prod, options);
                 writer.WriteEndArray();
 
-                writer.WriteNumber("start_symbol", 0);
-
                 writer.WriteStartArray("nonterminals");
                 foreach (var nt in lang.Nonterminals) Converters.Instance.ToNtFmt.Write(writer, (nt, lattices[lang.TypeHelper.GetOutputBlockType(nt.TermType).Id]), options);
                 writer.WriteEndArray();
@@ -406,7 +681,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             }
         );
 
-        public static string Serialize(InitialStuff a, IReadOnlyList<LatticeDefs> b) {
+        public static string Serialize(TupleLibrary a, IReadOnlyList<LatticeDefs> b) {
             var opt = new JsonSerializerOptions() {
                 PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols

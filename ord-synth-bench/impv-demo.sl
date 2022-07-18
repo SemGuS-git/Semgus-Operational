@@ -73,11 +73,15 @@
                 (S.Sem t2 x1 y1 z1 x2 y2 z2)
             )))
             (($ite t1 t2 t3)
-                (exists ((b Bool) (x_l Int) (y_l Int) (z_l Int) (x_r Int) (y_r Int) (z_r Int)) (and
+                (exists ((b Bool)) (and
                     (B.Sem t1 x0 y0 z0 b)
-                    (S.Sem t2 x0 y0 z0 x_l y_l z_l)
-                    (S.Sem t3 x0 y0 z0 x_r y_r z_r)
-                    (= x2 (ite b x_l x_r)) (= y2 (ite b y_l y_r)) (= z2 (ite b z_l z_r))
+                    (= b true)
+                    (S.Sem t2 x0 y0 z0 x2 y2 z2)
+                ))
+                (exists ((b Bool)) (and
+                    (B.Sem t1 x0 y0 z0 b)
+                    (= b false)
+                    (S.Sem t3 x0 y0 z0 x2 y2 z2)
                 ))
             )
         )) :input (x0 y0 z0) :output (x2 y2 z2))

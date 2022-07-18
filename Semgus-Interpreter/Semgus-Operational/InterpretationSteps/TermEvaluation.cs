@@ -9,6 +9,7 @@ namespace Semgus.Operational {
         public TermVariableInfo Term { get; }
 
         private readonly List<(bool isOutput, VariableInfo info)> _args;
+        public IReadOnlyList<(bool isOutput, VariableInfo info)> Args => _args;
 
         public IReadOnlyList<VariableInfo> InputVariables { get; }
         public IReadOnlyList<VariableInfo> OutputVariables { get; }
@@ -33,6 +34,7 @@ namespace Semgus.Operational {
             _n = _n_in + _n_out;
         }
 
+        
         public bool Execute(EvaluationContext context, InterpreterState state) {
             var tNode = context.Terms[Term.Index];
 

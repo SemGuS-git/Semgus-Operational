@@ -27,7 +27,7 @@ namespace Semgus.OrderSynthesis.SketchSyntax {
             CompareId = new($"compare_{id}");
             EqId = new($"eq_{id}");
             DisjunctId = new($"disjunct_{id}");
-            NotEquivalenceHarnessId = new($"not_eqivalence_{id}");
+            NotEquivalenceHarnessId = new($"not_equivalence_{id}");
             PartialOrderHarnessId = new($"partial_order_{id}");
             SupersetHarnessId = new($"next_order_is_superset_{id}");
         }

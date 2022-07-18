@@ -1,6 +1,21 @@
 ﻿using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.SketchSyntax.SymbolicEvaluation {
+    internal class SingleExprEvalScope : IScope {
+        public IEnumerator<IStatement> Enumerator => throw new InvalidOperationException();
+
+        public Stack<ExpressionScope> PendingStack => throw new NotImplementedException();
+
+        public void Assign(MiniParser.Identifier id, IExpression expression) => throw new InvalidOperationException();
+
+
+        public void Declare(MiniParser.Identifier id, IExpression expression) => throw new InvalidOperationException();
+
+        public IEnumerable<KeyValuePair<MiniParser.Identifier, IExpression>> GetSideEffectAssigns() => throw new InvalidOperationException();
+
+        public void OnPop(ScopeStack stack) => throw new InvalidOperationException();
+        public bool TryGetLocalValue(MiniParser.Identifier identifier, out IExpression expr) => throw new InvalidOperationException();
+    }
     internal class LeftBranch : ScopeBase {
         public IExpression Cond { get; }
 

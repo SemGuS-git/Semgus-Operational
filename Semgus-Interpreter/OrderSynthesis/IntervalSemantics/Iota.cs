@@ -80,7 +80,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
         public int Size => Members.Count;
     }
 
-    public record BlockProduction(int TermTypeId, string Name, List<BlockSemantics> Semantics);
+    public record BlockProduction(int TermTypeId, string Name, int SequenceNumber, List<BlockSemantics> Semantics);
     public record BlockSemantics(List<int> BlockTypes, List<IBlockStep> Steps) {
         internal BlockSemantics WithTfMonotonicities(IReadOnlyList<Monotonicity> mono) {
             List<IBlockStep> new_steps = new();
@@ -95,23 +95,23 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
     }
 
     public class TypeHelper {
-        public IReadOnlyDictionary<string, int> TermTypeIds { get; }
+        public GrammarIndexing GrammarIndexing { get; }
         public IReadOnlyList<BlockDef> BlockTypes { get; }
         public IReadOnlyList<(int type_id_in, int type_id_out)> TermTypeInputOutput { get; }
 
-        public TypeHelper(IReadOnlyDictionary<string, int> termTypeIds, IReadOnlyList<BlockDef> blockTypes, IReadOnlyList<(int type_id_in, int type_id_out)> termTypeInputOutput) {
-            TermTypeIds = termTypeIds;
+        public TypeHelper(GrammarIndexing grammarIndexing, IReadOnlyList<BlockDef> blockTypes, IReadOnlyList<(int type_id_in, int type_id_out)> termTypeInputOutput) {
+            GrammarIndexing = grammarIndexing;
             BlockTypes = blockTypes;
             TermTypeInputOutput = termTypeInputOutput;
         }
 
-        public BlockDef GetInputBlockType(SemgusTermType term_type) => GetInputBlockType(TermTypeIds[term_type.Name.Name.Symbol]);
-        public BlockDef GetOutputBlockType(SemgusTermType term_type) => GetOutputBlockType(TermTypeIds[term_type.Name.Name.Symbol]);
+        public BlockDef GetInputBlockType(SemgusTermType term_type) => GetInputBlockType(GrammarIndexing.TermTypeIds[term_type.Name.Name.Symbol]);
+        public BlockDef GetOutputBlockType(SemgusTermType term_type) => GetOutputBlockType(GrammarIndexing.TermTypeIds[term_type.Name.Name.Symbol]);
         public BlockDef GetInputBlockType(int term_type_id) => BlockTypes[TermTypeInputOutput[term_type_id].type_id_in];
         public BlockDef GetOutputBlockType(int term_type_id) => BlockTypes[TermTypeInputOutput[term_type_id].type_id_out];
 
         public int GetTermTypeId(SemgusTermType term_type) {
-            return TermTypeIds[term_type.Name.Name.Symbol];
+            return GrammarIndexing.TermTypeIds[term_type.Name.Name.Symbol];
         }
 
         class BlockShape : IEquatable<BlockShape?> {
@@ -154,7 +154,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
         }
 
 
-        public static TypeHelper From(IReadOnlyDictionary<string, int> term_type_ids, IReadOnlyList<ProductionRuleInterpreter> relevant_productions) {
+        public static TypeHelper From(GrammarIndexing g_idx, IReadOnlyList<ProductionRuleInterpreter> relevant_productions) {
             // Merge all tuple types with the same shape
             Dictionary<(int tt_id, bool is_out), int> tt_io_block_ids = new();
 
@@ -175,6 +175,8 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                 }
             }
 
+            var term_type_ids = g_idx.TermTypeIds;
+
             // Scan shapes
             foreach (var prod in relevant_productions) {
                 var ttk = prod.TermType.GetKey();
@@ -194,13 +196,13 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
             var block_types = Sequentialize(block_ids).Select((a, i) => new BlockDef(i, a.Types)).ToList();
 
 
-            return new(term_type_ids, block_types, io_list);
+            return new(g_idx, block_types, io_list);
         }
         public BlockProduction GetBlockAbstraction(ProductionRuleInterpreter prod) {
             var term_type = this.GetTermTypeId(prod.TermType);
-            var name = prod.ToString();
+            var name = prod.SyntaxConstructor.Operator.AsString();
             var semantics = prod.Semantics.Select(a => GetBlockAbstraction(a)).ToList();
-            return new(term_type, name, semantics);
+            return new(term_type, name, prod.SequenceNumber, semantics);
         }
 
         public BlockSemantics GetBlockAbstraction(SemanticRuleInterpreter sem) {
@@ -386,10 +388,62 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
     }
 
     public record FlatNt(string Name, int TermType, List<FlatGrammarProd> Productions);
-    public record FlatGrammarProd(int prod_idx, List<int> child_nt_ids);
+    public record FlatGrammarProd(int prod_id, List<int> child_nt_ids);
 
-    public class InitialStuff {
-        public InitialStuff(List<FlatNt> flat_nts, List<BlockProduction> block_prod, TypeHelper type_helper, int start_symbol) {
+    public class GrammarIndexing {
+        public IReadOnlyList<NtSymbol> OrderedNonterminals { get; }
+        public IReadOnlyDictionary<NtSymbol,int> NtIds { get; }
+
+        public IReadOnlyDictionary<int, SemgusTermType> NtTermTypes { get; }
+        public  IReadOnlyDictionary<string, int> TermTypeIds { get; }
+
+        public GrammarIndexing(List<NtSymbol> ordered_nts, Dictionary<int, SemgusTermType> nt_term_types, Dictionary<string, int> term_type_ids) {
+            this.OrderedNonterminals = ordered_nts;
+            this.NtIds = ordered_nts.Select((a, i) => (a, i)).ToDictionary(u => u.a, u => u.i);
+            this.NtTermTypes = nt_term_types;
+            this.TermTypeIds = term_type_ids;
+        }
+
+        public int GetTermTypeId(NtSymbol nt) {
+            return TermTypeIds[NtTermTypes[NtIds[nt]].Name.Name.Symbol];
+        }
+
+        public static  GrammarIndexing From(NtSymbol start_symbol, InterpretationGrammar grammar) {
+            Debug.Assert(grammar.Nonterminals.Contains(start_symbol));
+
+            List<NtSymbol> ordered_nts = new();
+            ordered_nts.Add(start_symbol);
+
+            foreach (var nt in grammar.Nonterminals) {
+                if (nt == start_symbol) continue;
+                ordered_nts.Add(nt);
+            }
+
+            Dictionary<string, int> term_type_ids = new();
+            Dictionary<int, SemgusTermType> nt_term_types = new();
+
+            foreach(var q in ordered_nts.Select((nt,i)=>(i,grammar.Productions[nt]))) {
+                var (nt_id, prods) = q;
+                if (prods.Count == 0) continue;
+
+                var the_term_type = prods[0].Production.TermType;
+                Debug.Assert(prods.All(prod => prod.Production.TermType == the_term_type));
+
+                nt_term_types.Add(nt_id, the_term_type);
+
+                var ttk = the_term_type.Name.Name.Symbol;
+
+                if (!term_type_ids.ContainsKey(ttk)) {
+                    term_type_ids.Add(ttk, term_type_ids.Count);
+                }
+            }
+
+            return new(ordered_nts, nt_term_types, term_type_ids);
+        }
+    }
+
+    public class TupleLibrary {
+        public TupleLibrary(List<FlatNt> flat_nts, List<BlockProduction> block_prod, TypeHelper type_helper, int start_symbol) {
             Nonterminals = flat_nts;
             Productions = block_prod;
             TypeHelper = type_helper;
@@ -401,21 +455,24 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
         public TypeHelper TypeHelper { get; }
         public int StartSymbol { get; }
 
-        public static InitialStuff From(Operational.InterpretationGrammar grammar, Operational.InterpretationLibrary lib) {
- 
+        public static TupleLibrary From(GrammarIndexing g_idx, Util.DictOfList<NtSymbol,NonterminalProduction> nt_prods, Operational.InterpretationLibrary lib) {
+            var ordered_nts = g_idx.OrderedNonterminals;
+            var term_type_ids = g_idx.TermTypeIds;
+
+            Debug.Assert(ordered_nts.Count == nt_prods.Count);
 
             Dictionary<ProductionRuleInterpreter, int> all_prod_dict = new();
 
-            var nt_ids = grammar.Nonterminals.Select((a, i) => (a, i)).ToDictionary(a => a.a, a => a.i);
+            var nt_ids = ordered_nts.Select((a, i) => (a, i)).ToDictionary(u => u.a, u => u.i);
 
             List<FlatNt> flat_nts = new();
-            Dictionary<string, int> term_type_ids = new();
+
 
             // Merge all tuple types with the same shape
-            foreach (var kvp in grammar.Productions) {
+            foreach (var tu in ordered_nts.Select(nt=>(nt,prods: nt_prods[nt]))) {
                 List<FlatGrammarProd> fgpl = new();
-                int? nt_term_type_id = null;
-                foreach (var nt_prod in kvp.Value) {
+                var nt_term_type_id = g_idx.GetTermTypeId(tu.nt);
+                foreach (var nt_prod in tu.prods) {
 
                     int prod_id;
                     if (!all_prod_dict.TryGetValue(nt_prod.Production, out prod_id)) {
@@ -426,31 +483,24 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
 
 
                     var ttk = nt_prod.Production.TermType.GetKey();
-
-                    if (term_type_ids.TryGetValue(ttk,out var tti)) {
-                        Debug.Assert(nt_term_type_id!.Value == tti);
-                    } else {
-                        tti = term_type_ids.Count;
-                        term_type_ids.Add(ttk, tti);
-                        nt_term_type_id = tti;
-                    }   
+                    Debug.Assert(term_type_ids.TryGetValue(ttk, out var tti) && nt_term_type_id == tti);
                 }
 
-                flat_nts.Add(new(kvp.Key.Name, nt_term_type_id!.Value, fgpl));
+                flat_nts.Add(new(tu.nt.Name, nt_term_type_id, fgpl));
             }
 
             var all_prod = TypeHelper.Sequentialize(all_prod_dict);
 
-            var type_helper = TypeHelper.From(term_type_ids, all_prod);
+            var type_helper = TypeHelper.From(g_idx, all_prod);
 
             var block_prod = all_prod.Select(type_helper.GetBlockAbstraction).ToList();
 
-            var start_symbol = 0;
+            var start_symbol_id = 0;
 
-            return new(flat_nts, block_prod, type_helper, start_symbol);
+            return new(flat_nts, block_prod, type_helper, start_symbol_id);
         }
 
-        internal InitialStuff WithMonotonicitiesFrom(IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
+        internal TupleLibrary WithMonotonicitiesFrom(IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
             var ok = this.Productions.ToList();
 
             foreach(var aqf in queryFunctions) {
