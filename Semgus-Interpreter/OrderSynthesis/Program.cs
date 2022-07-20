@@ -1,81 +1,97 @@
 ﻿#define NOT_REUSE
 
-using Microsoft.Extensions.Logging;
-using Semgus.CommandLineInterface;
+using CommandLine;
+using CommandLine.Text;
 using Semgus.Operational;
-using Semgus.OrderSynthesis.AbstractInterpretation;
 using Semgus.OrderSynthesis.IntervalSemantics;
-using Semgus.OrderSynthesis.SketchSyntax.Parsing;
 using Semgus.OrderSynthesis.Subproblems;
-using Semgus.Solvers.Enumerative;
-using Serilog;
-using Serilog.Extensions.Logging;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace Semgus.OrderSynthesis {
 
     public class Program {
 
-        static async Task Main(string[] args) {
-            var head = args[0];
 
-            var nex = new List<string>();
+        public class Options {
 
-            foreach (var target in new[] {
-                //"sum-by-while.sl",
+            [Value(0, MetaName = "input", Required = true, HelpText = "Relative path to the input Semgus file.")]
+            public string InputFile { get; set; }
 
-                //"impv-demo.sl",
-               //"max2-exp.sl",
-               //"max3-exp.sl",
-               // "regex4-simple.sl",
-               // "regex4-either-pair.sl",
-               // "polynomial.sl",
-               // "regex6-padded-cycle.sl",
-               // "regex8-aa.sl"
-            }) {
-                var file = head + target;
-                Debug.Assert(File.Exists(file), "Missing input file {0}", file);
-                nex.Add(file);
-            }
-            
-            foreach(var file in nex) {
-                try {
-                    await Main(file);
-                } catch(Exception e) {
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine($"Hit exception during work on {file}");
-                    Console.WriteLine(e.ToString());
-                    Console.WriteLine();
-                    Console.WriteLine();
+            [Option('o', "output", Required = false, Default = "", HelpText = "Relative path to the output folder. Folder will be created if necessary. If not set, the output folder will appear alongside the input file.")]
+            public string OutputPath { get; set; }
+
+            [Option('f', "overwrite", Required = false, Default = false, HelpText = "If the output path exists, overwrite it.")]
+            public bool Overwrite { get; set; }
+
+            [Option("run-mono", Required = false, Default = false, HelpText = "Run the monotonicity pipeline to produce an interval abstract semantics. (Requires a WSL environment with Sketch installed)")]
+            public bool RunMonotonicityPipeline { get; set; }
+
+            [Usage]
+            public static IEnumerable<Example> Examples {
+                get {
+                    yield return new Example("Basic", new Options { InputFile="problem.sl", });
                 }
             }
         }
 
-        static async Task Main(string file) {
+        static async Task Main(string[] args) {
 
-            Debug.Assert(File.Exists(file), "Missing input file {0}", file);
+            var parser = new CommandLine.Parser();
 
-            string fname = Path.GetFileName(file);
-            FlexPath dir = new($"Users/Wiley/home/uw/semgus/monotonicity-synthesis/sketch3/{fname}/");
+            var parserResult = parser.ParseArguments<Options>(args);
 
-            var items = ParseUtil.TypicalItems.Acquire(file); // May throw
+            await parserResult.WithNotParsed(errs => DisplayHelp(parserResult)).WithParsedAsync(Main);
+
+        }
+        private static void DisplayHelp(ParserResult<Options> parserResult) {
+            var helpText = HelpText.AutoBuild(parserResult, h => {
+                h.Heading = "SemGuS Operational Semantics Tool";
+                h.Copyright = "Copyright (c) 2022 University of Wisconsin-Madison";
+                h.AddEnumValuesToHelpText = true;
+                return HelpText.DefaultParsingErrorsHandler(parserResult, h);
+            }, e => e);
+
+            Console.WriteLine(helpText);
+        }
+
+        static async Task Main(Options opt) { 
+            FlexPath input_file = FlexPath.FromWin(Path.GetFullPath(opt.InputFile));
+
+            if(!File.Exists(input_file.PathWin)) {
+                throw new FileNotFoundException("Missing input file", input_file.PathWin);
+            }
 
 
+            
+            var items = ParseUtil.TypicalItems.Acquire(input_file.PathWin); // May throw
 
             var start_symbol = items.Constraint.StartSymbol;
             Debug.Assert(items.Grammar.Nonterminals.Contains(start_symbol));
 
-            var g_idx = GrammarIndexing.From(start_symbol, items.Grammar);
-
-            var abs_sem_raw = TupleLibrary.From(g_idx, items.Grammar.Productions, items.Library); // May throw
+            var g_idx = GrammarIndexing.From(items.Grammar);
 
 
-            bool reuse_prev = false;
-            if (!reuse_prev) CleanPreviousOutput(dir);
-            PrepOutputDirectory(dir);
+            var dir = FlexPath.FromWin(string.IsNullOrWhiteSpace(opt.OutputPath) ? input_file.PathWin + ".out/" : Path.GetFullPath(opt.OutputPath));
 
+            var dir_info = new DirectoryInfo(dir.PathWin);
+
+            if(File.Exists(dir.PathWin)) {
+                if(opt.Overwrite) {
+                    File.Delete(dir.PathWin);
+                } else {
+                    throw new IOException($"Output path {dir.PathWin} is occupied by a file");
+                }
+            } else if (dir_info.Exists) {
+                if(opt.Overwrite) {
+                    dir_info.Delete(true);
+                } else {
+                    throw new IOException($"Output path {dir.PathWin} is occupied by a directory");
+                }
+            }
+
+            dir_info.Create();
+
+            Console.WriteLine($"Writing output to directory {dir_info.FullName}");
 
             {
                 var json_file = dir.Append("concrete_sem.json");
@@ -84,81 +100,30 @@ namespace Semgus.OrderSynthesis {
             }
             {
                 var json_file = dir.Append("specification.json");
-                File.WriteAllText(json_file.PathWin, OutputFormat.SpecConverters.Serialize(g_idx,items.Grammar.Productions,items.Constraint));
+                File.WriteAllText(json_file.PathWin, OutputFormat.SpecConverters.Serialize(g_idx,items.Grammar,items.Constraint));
                 Console.WriteLine("--- Wrote spec file ---");
             }
 
-            var (cores,lattices) = await RunPipeline(dir, items.Library, abs_sem_raw, reuse_prev);
+            if (opt.RunMonotonicityPipeline) {
 
-            // apply monotonicities to abstract sem
-            TupleLibrary abs_sem = abs_sem_raw.WithMonotonicitiesFrom(cores.QueryFunctions);
+                var abs_sem_raw = TupleLibrary.From(g_idx, items.Grammar.Productions, items.Library); // May throw
+
+                var (cores, lattices) = await RunPipeline(dir, items.Library, abs_sem_raw);
+
+                // apply monotonicities to abstract sem
+                TupleLibrary abs_sem = abs_sem_raw.WithMonotonicitiesFrom(cores.QueryFunctions);
 
 
-            Console.WriteLine("--- Abs sem monotonized ---");
+                Console.WriteLine("--- Abs sem monotonized ---");
 
-            {
-                var json_file = dir.Append("abstract_sem.json");
-                File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
-                Console.WriteLine("--- Wrote abs file ---");
+                {
+                    var json_file = dir.Append("abstract_sem.json");
+                    File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
+                    Console.WriteLine("--- Wrote abs file ---");
+                }
             }
 
-            //var cfg = new ConfigParameters {
-            //    CostFunction = TermCostFunction.Size,
-            //    Reductions = new() { ReductionMethod.ObservationalEquivalence }
-            //};
-
-            //{
-            //    var logCfg = new LoggerConfiguration()
-            //        .Enrich.FromLogContext()
-            //        .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
-            //        .WriteTo.Console()
-            //        .WriteTo.File($"demo.{fname}.log");
-
-            //    using var innerLogger = logCfg.CreateLogger();
-            //    var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
-
-            //    var solver = new TopDownSolver(cfg) { Logger = logger };
-            //    solver.TempRedTwo = new AbstractReduction(items.Constraint.Examples,abs_sem);
-
-            //    var sw = new Stopwatch();
-            //    sw.Start();
-            //    var synth_res = solver.Run(items.Grammar, items.Constraint);
-            //    sw.Stop();
-            //    logger.LogInformation("Top-down solver with abstract reduction took {0}", sw.Elapsed);
-
-            //}
-            //{
-            //    var logCfg = new LoggerConfiguration()
-            //        .Enrich.FromLogContext()
-            //        .MinimumLevel.Is(Serilog.Events.LogEventLevel.Debug)
-            //        .WriteTo.Console()
-            //        .WriteTo.File("demo.bottomup.log");
-
-            //    using var innerLogger = logCfg.CreateLogger();
-            //    var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(SolveRunner));
-
-
-            //    var solver = new BottomUpSolver(cfg) { Logger = logger };
-            //    var sw = new Stopwatch();
-            //    sw.Start();
-            //    var synth_res = solver.Run(items.Grammar, items.Constraint);
-            //    sw.Stop();
-            //    logger.LogInformation("Bottom-up solver with OE reduction took {0}", sw.Elapsed);
-            //}
-
-            Console.WriteLine("--- Did synth ---");
-        }
-
-        static void CleanPreviousOutput(FlexPath dir) {
-            if (Directory.Exists(dir.PathWin)) {
-                Directory.Delete(dir.PathWin, true);
-            }
-        }
-
-        static void PrepOutputDirectory(FlexPath dir) {
-            if (!Directory.Exists(dir.PathWin)) {
-                Directory.CreateDirectory(dir.PathWin);
-            }
+            Console.WriteLine("--- Done ---");
         }
 
         static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InterpretationLibrary conc, TupleLibrary abs_sem_raw, bool reuse_previous = false) {

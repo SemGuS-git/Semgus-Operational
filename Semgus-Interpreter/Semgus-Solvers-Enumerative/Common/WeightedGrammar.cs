@@ -1,5 +1,6 @@
 ﻿using Semgus.Operational;
 using Semgus.Util;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,6 +16,8 @@ namespace Semgus.Solvers {
         }
 
         public static WeightedGrammar SizeBased(InterpretationGrammar grammar) {
+            if (grammar.PassthroughProductions.Any(p => p.Value.Count > 0)) throw new NotImplementedException();
+
             var leafRules = new DictOfList<int, NonterminalProduction>();
             var branchRules = new DictOfList<int, NonterminalProduction>();
 

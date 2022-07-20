@@ -6,10 +6,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Semgus.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+	<AssemblyName>semgus-analyze</AssemblyName>
   </PropertyGroup>
 
+	<ItemGroup>
+		<PackageReference Include="CommandLineParser" Version="2.8.0" />
+		<PackageReference Include="CsvHelper" Version="27.1.1" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
+		<PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
+		<PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+		<PackageReference Include="Tomlyn" Version="0.1.2" />
+	</ItemGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\Semgus-Solvers-CLI\CommandLineInterface.csproj" />
+	  <ProjectReference Include="..\..\Semgus-Parser\ParserLibrary\ParserLibrary.csproj" />
+	  <ProjectReference Include="..\Semgus-Operational-Inference\Semgus-Operational-Inference.csproj" />
+	  <ProjectReference Include="..\Semgus-Operational\Semgus-Operational.csproj" />
+	  <ProjectReference Include="..\Semgus-Solvers-Enumerative\Solvers.csproj" />
   </ItemGroup>
 
 </Project>

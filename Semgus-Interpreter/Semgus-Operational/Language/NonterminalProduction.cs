@@ -5,7 +5,7 @@ namespace Semgus.Operational {
     /// Encodes a single production of a nonterminal, e.g. `N ::= (E + A)`.
     /// </summary>
     public class NonterminalProduction {
-        public ProductionRuleInterpreter Production { get; } /// TODO: replace with semantics-free info; move semantics to separate construct
+        public ProductionRuleInterpreter Production { get; } /// TODO: replace with semantics-freeinfo; move semantics to separate construct
 
         public NtSymbol ParentNonterminal { get; }
         public IReadOnlyList<NtSymbol> ChildNonterminals { get; }

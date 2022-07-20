@@ -12,6 +12,7 @@ namespace Semgus.Solvers.Enumerative {
         private readonly DictOfList<NtSymbol, NonterminalProduction> _branchTerms;
 
         public HeightEnumerator(INodeFactory nodeFactory, InterpretationGrammar grammar, ExpressionBank expressionBank) {
+            if (grammar.PassthroughProductions.Any(p => p.Value.Count > 0)) throw new NotImplementedException();
             _nodeFactory = nodeFactory;
             (_leafTerms, _branchTerms) = grammar.Productions.Partition(p => p.IsLeaf());
             _expressionBank = expressionBank;

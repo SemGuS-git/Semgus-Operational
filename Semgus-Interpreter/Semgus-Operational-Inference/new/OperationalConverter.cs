@@ -10,6 +10,7 @@ using Semgus.Model.Smt.Terms;
 using Semgus.Model.Smt.Theories;
 using Semgus.Util;
 using Semgus.TheoryImplementation;
+using System.Diagnostics;
 
 namespace Semgus {
 
@@ -43,21 +44,46 @@ namespace Semgus {
         public static InterpretationGrammar ProcessGrammar(SemgusGrammar g, InterpretationLibrary lib) {
             HashSet<NtSymbol> nonterminals = new(g.NonTerminals.Select(a => a.Convert()));
 
+            var start_symbol = g.NonTerminals.First().Convert();
+
             DictOfList<NtSymbol, NonterminalProduction> dict = new();
+            DictOfList<NtSymbol, NtSymbol> dict_passthrough = new();
 
-            foreach (var nt in g.NonTerminals) {
-                dict.AddCollection(nt.Convert(), new());
-            }
-
-            foreach(var prod in g.Productions) {
-                if(!lib.TryFind(prod.Instance.Sort,prod.Constructor,out var interp)) {
-                    throw new KeyNotFoundException("Unable to find production");
-                }
+            foreach (var prod in g.Productions) {
                 var nt = prod.Instance.Convert();
-                dict.Add(nt, new(interp, nt, prod.Occurrences.Select(a => a!.Convert()).ToList()));
+                Debug.Assert(nonterminals.Contains(nt));
+
+                // Handle case of passthrough productions, e.g. A ::= B
+                if (prod.Constructor is null) {
+                    if (prod.Occurrences.Count != 1) throw new InvalidDataException($"Invalid production {prod}");
+                    var pt = prod.Occurrences[0]!.Convert();
+                    dict_passthrough.Add(nt, pt);
+                } else {
+                    if (!lib.TryFind(prod.Instance.Sort, prod.Constructor, out var interp)) throw new KeyNotFoundException($"Unable to find production {prod.Constructor}");
+                    dict.Add(nt, new(interp, nt, prod.Occurrences.Select(a => a!.Convert()).ToList()));
+                }
             }
 
-            return new(dict);
+            List<NtSymbol> discards = new();
+            foreach (NtSymbol nt in nonterminals) {
+                if (dict.ContainsKey(nt)) {
+                    dict_passthrough.SafeGetCollection(nt);
+                } else if (dict_passthrough.ContainsKey(nt)) {
+                    dict.SafeGetCollection(nt);
+                } else {
+                    discards.Add(nt);
+                }
+            }
+
+            if (discards.Contains(start_symbol)) throw new InvalidDataException($"Start symbol {start_symbol} has no productions");
+
+            if(discards.Count > 0) {
+                // todo log this properly
+                Console.WriteLine($"Warning: NT symbol(s) [{string.Join(", ", discards)}] have no productions and will be discarded");
+                foreach (var a in discards) nonterminals.Remove(a);
+            }
+
+            return new(start_symbol,dict,dict_passthrough);
         }
 
         public static ITheoryImplementation MapTheory(ISmtTheory theory, ISortHelper sortHelper) {

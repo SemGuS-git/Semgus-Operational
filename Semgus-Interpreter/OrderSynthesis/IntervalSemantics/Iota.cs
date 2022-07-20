@@ -408,8 +408,8 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
             return TermTypeIds[NtTermTypes[NtIds[nt]].Name.Name.Symbol];
         }
 
-        public static  GrammarIndexing From(NtSymbol start_symbol, InterpretationGrammar grammar) {
-            Debug.Assert(grammar.Nonterminals.Contains(start_symbol));
+        public static GrammarIndexing From(InterpretationGrammar grammar) {
+            var start_symbol = grammar.StartSymbol;
 
             List<NtSymbol> ordered_nts = new();
             ordered_nts.Add(start_symbol);

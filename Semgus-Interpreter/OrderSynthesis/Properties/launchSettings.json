@@ -2,8 +2,8 @@
   "profiles": {
     "OrderSynthesis": {
       "commandName": "Project",
-      "commandLineArgs": "../../ord-synth-bench/",
-      "workingDirectory": "$(ProjectDir)"
+      "commandLineArgs": "c:/Users/Wiley/home/uw/semgus/Semgus-Benchmarks/trying/doesthiswork.sl -f --run-mono",
+      "workingDirectory": "$(ProjectDir)/../../ord-synth-bench/"
     }
   }
 }

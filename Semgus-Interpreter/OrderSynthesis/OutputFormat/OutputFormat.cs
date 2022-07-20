@@ -44,29 +44,58 @@ namespace Semgus.OrderSynthesis.OutputFormat {
     internal class SpecConverters {
         public static SpecConverters Instance { get; } = new();
 
-        internal static string Serialize(GrammarIndexing g_idx, DictOfList<NtSymbol,NonterminalProduction> productions, InductiveConstraint constraint) {
+        internal static string Serialize(GrammarIndexing g_idx, InterpretationGrammar grammar, InductiveConstraint constraint) {
             var opt = new JsonSerializerOptions() {
                 PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols
             };
             opt.Converters.Add(Instance.ToOutputDoc);
-            return JsonSerializer.Serialize((g_idx,productions,constraint), opt);
+            return JsonSerializer.Serialize((g_idx, grammar, constraint), opt);
         }
 
+        private static string[] FindIOLabels(InterpretationGrammar grammar, NtSymbol nt) {
+            if (TryFindIOLabels(grammar, nt, new(), out var labels)) {
+                return labels;
+            } else {
+                throw new InvalidDataException("Error: start symbol cannot produce a concrete term");
+            }
+        }
+        private static bool TryFindIOLabels(InterpretationGrammar grammar, NtSymbol nt, HashSet<NtSymbol> seen, out string[] labels) {
+            var p = grammar.Productions[nt];
+            if (p.Count > 0) {
+                var representative = p[0].Production;
+                labels = new string[representative.InputVariables.Count + representative.OutputVariables.Count];
+                foreach (var a in representative.InputVariables) labels[a.Index] = "in";
+                foreach (var a in representative.OutputVariables) labels[a.Index] = "out";
+                return true;
+            }
+
+            // If this NT has no operator productions (e.g., A ::= B | C), recurse
+            seen.Add(nt);
+            var pt = grammar.PassthroughProductions[nt];
+
+
+            foreach (var g in pt) {
+                // The hashset prevents issues due to cycles in the grammar
+                if (!seen.Contains(g) && TryFindIOLabels(grammar, g, seen, out labels)) {
+                    return true;
+                }
+            }
+
+
+            labels = default;
+            return false;
+        }
 
         public DelegateWriteOnlyConverter<(
             GrammarIndexing g_idx,
-            DictOfList<NtSymbol, NonterminalProduction> productions, 
+            InterpretationGrammar grammar,
             InductiveConstraint constraint
         )> ToOutputDoc { get; } = new(
             (writer, value, options) => {
-                var (g_idx,productions, constraint) = value;
+                var (g_idx, grammar, constraint) = value;
 
-                var representative = productions[g_idx.OrderedNonterminals[0]][0].Production;
-
-                var labels = new string[representative.InputVariables.Count + representative.OutputVariables.Count];
-                foreach (var a in representative.InputVariables) labels[a.Index] = "in";
-                foreach (var a in representative.OutputVariables) labels[a.Index] = "out";
+                var labels = FindIOLabels(grammar, g_idx.OrderedNonterminals[0]);
 
                 writer.WriteStartObject();
                 writer.WriteStartArray("arg_labels");
@@ -74,7 +103,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteEndArray();
 
                 writer.WriteStartArray("examples");
-                foreach(var e in constraint.Examples) {
+                foreach (var e in constraint.Examples) {
                     writer.WriteStringValue(string.Join(' ', e.Values).ToLower());
                 }
                 writer.WriteEndArray();
@@ -84,7 +113,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteStartArray("nonterminals");
                 for (int i = 0; i < g_idx.OrderedNonterminals.Count; i++) {
                     var nt = g_idx.OrderedNonterminals[i];
-                    SpecConverters.Instance.ToNtFmt.Write(writer, (nt,productions[nt], g_idx), options);
+                    SpecConverters.Instance.ToNtFmt.Write(writer, (nt, grammar.Productions[nt], grammar.PassthroughProductions[nt], g_idx), options);
 
 
                 }
@@ -93,9 +122,9 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             }
         );
 
-        public DelegateWriteOnlyConverter<(NtSymbol nt, IReadOnlyList<NonterminalProduction> prods, GrammarIndexing g_idx)> ToNtFmt { get; } = new(
+        public DelegateWriteOnlyConverter<(NtSymbol nt, IReadOnlyList<NonterminalProduction> prods, IReadOnlyList<NtSymbol> pt_prods, GrammarIndexing g_idx)> ToNtFmt { get; } = new(
             (writer, value, options) => {
-                var (nt, prods, g_idx) = value;
+                var (nt, prods, pt_prods, g_idx) = value;
 
                 writer.WriteStartObject();
                 writer.WriteString("name", nt.Name);
@@ -108,6 +137,16 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                     writer.WriteStartArray("child_nts");
                     foreach (var ch in prod.ChildNonterminals) writer.WriteNumberValue(g_idx.NtIds[ch]);
                     writer.WriteEndArray();
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+
+                writer.WriteStartArray("passthrough_productions");
+
+                foreach (var other_nt in pt_prods) {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("nt_id", g_idx.NtIds[other_nt]);
                     writer.WriteEndObject();
                 }
 
@@ -503,34 +542,34 @@ namespace Semgus.OrderSynthesis.OutputFormat {
 
                 writer.WriteStartObject();
 
-                    // members
-                    writer.WriteStartArray("members");
+                // members
+                writer.WriteStartArray("members");
                 foreach (var a in value.type.Elements) {
                     writer.WriteStringValue(SexpHelper.GetTypeName(a));
                 }
                 writer.WriteEndArray();
 
-                    // cmp
-                    writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(value.compare));
+                // cmp
+                writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(value.compare));
 
-                    // top
-                    writer.WriteStartArray("top");
+                // top
+                writer.WriteStartArray("top");
                 SexpHelper.StringifyConstFunction(value.top, value.type).ToList().ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
-                    // bot
-                    writer.WriteStartArray("bot");
+                // bot
+                writer.WriteStartArray("bot");
                 SexpHelper.StringifyConstFunction(value.bot, value.type).ToList().ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
 
-                    // join_incomparable
-                    writer.WriteStartArray("join_incomparable");
+                // join_incomparable
+                writer.WriteStartArray("join_incomparable");
                 SexpHelper.ToLatticeFnSexpGroup(value.join_incomparable, value.type).ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
-                    // meet_incomparable
-                    writer.WriteStartArray("meet_incomparable");
+                // meet_incomparable
+                writer.WriteStartArray("meet_incomparable");
                 SexpHelper.ToLatticeFnSexpGroup(value.meet_incomparable, value.type).ForEach(writer.WriteStringValue);
                 writer.WriteEndArray();
 
