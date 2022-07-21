@@ -8,23 +8,11 @@ using System.Diagnostics;
 namespace Semgus.OrderSynthesis.Subproblems {
     using static Sugar;
     internal class OrderExpansionStep {
-        //public record Config(
-        //    IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
-        //    IReadOnlyList<StructType> StructTypeList,
-        //    IReadOnlyList<MonotoneLabeling> MonotoneFunctions,
-        //    IReadOnlyList<FunctionDefinition> PrevComparisons
-        //);
-
-
-
         public int Iter { get; }
-        //public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
         public IReadOnlyList<StructType> Structs { get; }
-        //public IReadOnlyList<MonotoneLabeling> MonotoneFunctions { get; }
         public IReadOnlyDictionary<Identifier, FunctionDefinition> PrevComparisonsByStId { get; }
 
         public IReadOnlyList<AnnotatedQueryFunction> QueryFunctions { get; }
-        //public IReadOnlyList<Variable> Budgets { get; private set; }
 
         public OrderExpansionStep(int iter, IReadOnlyList<StructType> struct_types, IReadOnlyList<FunctionDefinition> comparisons,IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
             var compare_to_st_map = struct_types.ToDictionary(st => st.CompareId, st => st.Id);
@@ -204,71 +192,10 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 UnaryOp.Not.Of(prev.Call(a.Ref(), b.Ref()))
             ));
         }
-
-        //private IEnumerable<IStatement> GetMonoAssertions(IReadOnlyDictionary<Identifier, Clasp> clasps, MonotoneLabeling labeled) {
-        //    var fn = labeled.Function;
-        //    var sig = fn.Signature;
-        //    var labels = labeled.ArgMonotonicities;
-        //    if (!StructTypeMap.TryGetValue(sig.ReturnTypeId, out var type_out)) throw new NotSupportedException();
-
-        //    List<VariableRef> fixed_args = new();
-
-        //    {
-        //        Counter<Identifier> vcount = new();
-        //        foreach (var v in sig.Args) {
-        //            var key = v.TypeId;
-        //            fixed_args.Add(clasps[key].Indexed[vcount.Peek(key)].Ref());
-        //            vcount.Increment(key);
-        //        }
-        //    }
-
-        //    yield return new Annotation($"Monotonicity of {fn.Id} ({fn.Alias})", 1);
-
-        //    for (int i = 0; i < sig.Args.Count; i++) {
-        //        if (!StructTypeMap.TryGetValue(sig.Args[i].TypeId, out var type_i)) throw new NotSupportedException();
-
-        //        if (labels[i] == Monotonicity.None) {
-        //            yield return new Annotation($"Argument {i}: no monotonicity");
-        //            continue;
-        //        }
-        //        yield return new Annotation($"Argument {i}: {labels[i]}");
-
-        //        var alt_i = clasps[type_i.Id].Alternate;
-
-        //        List<VariableRef> alt_args = new(fixed_args);
-        //        alt_args[i] = alt_i.Ref();
-
-        //        switch (labels[i]) {
-        //            case Monotonicity.Increasing:
-        //                yield return new AssertStatement(
-        //                    type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(fixed_args), fn.Call(alt_args)))
-        //                );
-        //                break;
-        //            case Monotonicity.Decreasing:
-        //                yield return new AssertStatement(
-        //                    type_i.CompareId.Call(fixed_args[i], alt_i.Ref()).Implies(type_out.CompareId.Call(fn.Call(alt_args), fn.Call(fixed_args)))
-        //                );
-        //                break;
-        //        }
-        //    }
-        //}
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
         public static async Task<Output> ExecuteLoop(FlexPath dir, MonotonicityStep.Output prior, bool reuse_prev = false) {
 
             const int MAX_REFINEMENT_STEPS = 100;
-
-            //public FunctionSignature AsRichSignature(IReadOnlyDictionary<Identifier, IType> typeDict, Identifier? replacement_id = null)
-            //    => new(
-            //        Flag,
-            //        typeDict[ReturnTypeId],
-            //        replacement_id ?? Id,
-            //        Args.Select(
-            //            a => a is RefVariableDeclaration ?
-            //            throw new InvalidOperationException() :
-            //            new Variable(a.Id, typeDict[a.TypeId])
-            //        ).ToList()
-            //    ) { ImplementsId = this.ImplementsId };
-
 
             int i = 0;
             var comparisons = prior.Comparisons;
