@@ -2,7 +2,7 @@
   "profiles": {
     "OrderSynthesis": {
       "commandName": "Project",
-      "commandLineArgs": "c:/Users/Wiley/home/uw/semgus/Semgus-Benchmarks/trying/doesthiswork.sl -f --run-mono",
+      "commandLineArgs": "c:/Users/Wiley/home/uw/semgus/Semgus-Benchmarks/regular-expressions/alpharegex/GCPE_02.sl -f --run-mono",
       "workingDirectory": "$(ProjectDir)/../../ord-synth-bench/"
     }
   }

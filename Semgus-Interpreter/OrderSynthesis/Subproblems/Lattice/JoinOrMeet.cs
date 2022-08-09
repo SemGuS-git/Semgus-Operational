@@ -162,19 +162,17 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 var (input_args, input_assembly_statements) = Shared.GetMainInitContent(Subject, new[] {a,b});
 
                 body.AddRange(input_assembly_statements);
-                body.Add(Assertion(ab_incomparable));
-
 
                 var prev_val = Varn($"prev_{Which}_ab", Subject);
                 var next_val = Varn($"next_{Which}_ab", Subject);
 
-                body.Add(prev_val.Declare(prev_def.Call(a, b)));
-                body.Add(next_val.Declare(SynthesisTarget.Call(a, b)));
-
                 IExpression is_no_looser_bound = IsJoinElseMeet ? Compare.Call(next_val, prev_val) : Compare.Call(prev_val, next_val);
 
-
-                body.Add(Assertion(is_no_looser_bound));
+                body.Add(new IfStatement(ab_incomparable,
+                    prev_val.Declare(prev_def.Call(a, b)),
+                    next_val.Declare(SynthesisTarget.Call(a, b)),
+                    is_no_looser_bound.Assert()
+                ));
 
                 return new(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new($"stability_{Which}"), input_args), body);
             }

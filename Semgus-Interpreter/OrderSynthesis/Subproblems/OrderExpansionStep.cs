@@ -10,15 +10,17 @@ namespace Semgus.OrderSynthesis.Subproblems {
     internal class OrderExpansionStep {
         public int Iter { get; }
         public IReadOnlyList<StructType> Structs { get; }
+        public IReadOnlyList<StructType> StructsToOrder { get; }
         public IReadOnlyDictionary<Identifier, FunctionDefinition> PrevComparisonsByStId { get; }
 
         public IReadOnlyList<AnnotatedQueryFunction> QueryFunctions { get; }
 
-        public OrderExpansionStep(int iter, IReadOnlyList<StructType> struct_types, IReadOnlyList<FunctionDefinition> comparisons,IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
-            var compare_to_st_map = struct_types.ToDictionary(st => st.CompareId, st => st.Id);
+        public OrderExpansionStep(int iter, IReadOnlyList<StructType> struct_types, IReadOnlyList<StructType> struct_types_to_order, IReadOnlyList<FunctionDefinition> comparisons,IReadOnlyList<AnnotatedQueryFunction> queryFunctions) {
+            var compare_to_st_map = struct_types_to_order.ToDictionary(st => st.CompareId, st => st.Id);
 
             Iter = iter;
             Structs = struct_types;
+            StructsToOrder = struct_types_to_order;
 
             PrevComparisonsByStId = comparisons
                 .Select(c => (compare_to_st_map[c.Id], c with { Signature = c.Signature with { Id = new($"prev_{c.Id}") } }))
@@ -33,12 +35,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
         private record Bundle(StructType st, FunctionDefinition prev_cmp, Variable budget);
 
         public IEnumerable<IStatement> GetFile() {
-            var bundles = Structs.Select(s => new Bundle(s, PrevComparisonsByStId[s.Id], new Variable($"budget_{s.Id}", IntType.Id))).ToList();
+            foreach(var st in Structs) {
+                yield return st.GetStructDef();
+            }
+
+            var bundles = StructsToOrder.Select(s => new Bundle(s, PrevComparisonsByStId[s.Id], new Variable($"budget_{s.Id}", IntType.Id))).ToList();
 
             foreach (var b in bundles) {
                 var st = b.st;
                 yield return b.budget.Declare(new Hole());
-                yield return st.GetStructDef();
                 yield return st.GetEqualityFunction();
                 yield return b.prev_cmp;
                 yield return st.GetCompareReductionGenerator(b.budget);
@@ -141,7 +146,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             IExpression inputs_ord = target_st.CompareId.Call(a_in, b_in);
             var guard = query.preconditions.Count == 0 ? inputs_ord :
-                Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(a_in), p.Call(b_in) }).Append(inputs_ord).ToList());
+                Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(arg_list_a), p.Call(arg_list_b) }).Append(inputs_ord).ToList());
 
             var a_out = query.output_transformer.Call(arg_list_a);
             var b_out = query.output_transformer.Call(arg_list_b);
@@ -200,7 +205,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             int i = 0;
             var comparisons = prior.Comparisons;
             for (; i < MAX_REFINEMENT_STEPS; i++) {
-                var refinement_step = new OrderExpansionStep(i, prior.StructDefs, comparisons, prior.QueryFunctions);
+                var refinement_step = new OrderExpansionStep(i, prior.StructDefs, prior.StructDefsToOrder, comparisons, prior.QueryFunctions);
 
                 var dir_refinement = dir.Append($"iter_{i}/");
 

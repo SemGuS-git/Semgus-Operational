@@ -6,41 +6,23 @@ using System.Diagnostics;
 
 namespace Semgus.OrderSynthesis.Subproblems {
     internal class SimplificationStep {
-        //public record Config(
-        //    IReadOnlyDictionary<Identifier, StructType> StructTypeMap,
-        //    IReadOnlyList<StructType> StructTypeList,
-        //    IReadOnlyList<FunctionDefinition> PrevComparisons
-        //);
-
-        private record SimplificationClasp(StructType Type, RichTypedVariable A, RichTypedVariable B);
-
-        //public IReadOnlyDictionary<Identifier, StructType> StructTypeMap { get; }
-        //public IReadOnlyList<StructType> StructTypeList { get; }
-        //public IReadOnlyList<FunctionDefinition> PrevComparisons { get; }
-        //public IReadOnlyList<Variable> Budgets { get; private set; }
-        public IReadOnlyList<StructType> Structs { get; }
+        public IReadOnlyList<StructType> StructsToOrder { get; }
         public IReadOnlyDictionary<Identifier, FunctionDefinition> PrevComparisonsByStId { get; }
 
         public SimplificationStep(MonotonicityStep.Output prior) {
-            var compare_to_st_map = prior.StructDefs.ToDictionary(st => st.CompareId, st => st.Id);
+            StructsToOrder = prior.StructDefsToOrder;
 
-            //Iter = iter;
-            //Structs = struct_types;
+            var compare_to_st_map = StructsToOrder.ToDictionary(st => st.CompareId, st => st.Id);
 
             PrevComparisonsByStId = prior.Comparisons
                 .Select(c => (compare_to_st_map[c.Id], c with { Signature = c.Signature with { Id = new($"prev_{c.Id}") } }))
                 .ToDictionary(t => t.Item1, t => t.Item2);
-            Structs = prior.StructDefs;
-
-            //Budgets = StructTypeList.Select(s => new Variable($"budget_{s.Id}", IntType.Id)).ToList();
-
-            //Debug.Assert(PrevComparisons.All(f => StructTypeMap.TryGetValue(f.Signature.Args[0].TypeId, out var st) && f.Signature.Id != st.CompareId));
         }
 
         private record Bundle(StructType st, FunctionDefinition prev_cmp, Variable budget);
 
         public IEnumerable<IStatement> GetFile() {
-            var bundles = Structs.Select(s => new Bundle(s, PrevComparisonsByStId[s.Id], new Variable($"budget_{s.Id}", IntType.Id))).ToList();
+            var bundles = StructsToOrder.Select(s => new Bundle(s, PrevComparisonsByStId[s.Id], new Variable($"budget_{s.Id}", IntType.Id))).ToList();
 
 
             foreach (var b in bundles) {
@@ -106,7 +88,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Console.WriteLine($"--- [Reduction] Reading compare functions ---");
 
-            var compare_ids = this.Structs.Select(s => s.CompareId).ToList();
+            var compare_ids = this.StructsToOrder.Select(s => s.CompareId).ToList();
 
             var extraction_targets = compare_ids.Concat(this.PrevComparisonsByStId.Values.Select(p => p.Id));
             IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();

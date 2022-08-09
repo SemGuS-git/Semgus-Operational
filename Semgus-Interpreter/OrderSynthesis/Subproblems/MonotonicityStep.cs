@@ -31,11 +31,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
     internal class MonotonicityStep {
         IReadOnlyList<StructType> StructDefs { get; }
+        IReadOnlyList<StructType> StructDefsToOrder { get; } // this is a proper subset of StructDefs
         IReadOnlyList<MonoQueryBundle> QueryFunctions { get; } // at most one per sem
 
         IReadOnlyDictionary<Identifier, (int prod_idx, int sem_idx)> QueryIdMap { get; }
 
         public MonotonicityStep(TupleLibrary stuff) {
+
             var struct_defs = stuff.TypeHelper.BlockTypes.Select(bt =>
                 new StructType(
                     new($"bt_{bt.Id}"),
@@ -49,25 +51,45 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             List<MonoQueryBundle> query_fns = new();
 
-            for (int i = 0; i < stuff.Productions.Count; i++) {
-                var prod = stuff.Productions[i];
-                for (int j = 0; j < prod.Semantics.Count; j++) {
-                    var sem = prod.Semantics[j];
-                    var fn_id = new Identifier($"prod_{i}_sem_{j}");
-                    var bundle = GetMonoSubjectFunction(struct_defs, fn_id, sem);
+            bool[] bt_occurs_as_output = new bool[struct_defs.Count];
 
-                    // omit sems with only trivial transformers.
-                    // - If directly passing output from a child term, no transformer step is required.
-                    // - If assigning from variable-free formulas, e.g. in literal terminals, we implicitly construct a singular interval.
+            {
+                List<(MonoQueryBundle bundle, HashSet<int> input_block_types, int i, int j)> wip = new();
 
-                    if (bundle.relevant_block_ids.Count > 0) {
-                        query_fns.Add(bundle);
-                        query_fn_id_map.Add(bundle.output_transformer.Id, (i, j));
+                for (int i = 0; i < stuff.Productions.Count; i++) {
+                    var prod = stuff.Productions[i];
+                    for (int j = 0; j < prod.Semantics.Count; j++) {
+                        var sem = prod.Semantics[j];
+                        var fn_id = new Identifier($"prod_{i}_sem_{j}");
+                        var bundle = GetMonoSubjectFunction(struct_defs, fn_id, sem);
+
+                        // omit sems with only trivial transformers.
+                        // - If directly passing output from a child term, no transformer step is required.
+                        // - If assigning from variable-free formulas, e.g. in literal terminals, we implicitly construct a singular interval.
+
+                        if (bundle.relevant_block_ids.Count > 0) {
+                            wip.Add((bundle, bundle.relevant_block_ids.Select(k => sem.BlockTypes[k]).ToHashSet(), i, j));
+                            bt_occurs_as_output[sem.BlockTypes[1]] = true;
+                        }
                     }
+                }
+
+                // Some block types might never be produced as outputs; i.e., we will never construct nonsingular intervals in them.
+                // Identify these block types, and ignore all query functions with strictly non-interval inputs.
+
+                foreach (var (bundle, _, i, j) in wip.Where(tu => tu.input_block_types.Any(bt_id => bt_occurs_as_output[bt_id]))) {
+                    query_fns.Add(bundle);
+                    query_fn_id_map.Add(bundle.output_transformer.Id, (i, j));
                 }
             }
 
+            var structs_to_ignore = new HashSet<Identifier>();
+            for (int i = 0; i < bt_occurs_as_output.Length; i++) if (!bt_occurs_as_output[i]) structs_to_ignore.Add(struct_defs[i].Id);
+
+            Debug.Assert(!structs_to_ignore.Overlaps(query_fns.Select(qf => qf.output_transformer.Signature.ReturnTypeId)));
+
             StructDefs = struct_defs;
+            StructDefsToOrder = struct_defs.Where(sd => !structs_to_ignore.Contains(sd.Id)).ToList();
             QueryFunctions = query_fns;
             QueryIdMap = query_fn_id_map;
         }
@@ -79,6 +101,8 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             foreach (var st in StructDefs) {
                 yield return st.GetStructDef();
+            }
+            foreach (var st in StructDefsToOrder) {
                 yield return st.GetEqualityFunction();
                 yield return st.GetCompareGenerator();
                 yield return st.GetDisjunctGenerator();
@@ -89,7 +113,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 foreach (var fdef in q.preconditions.Append(q.output_transformer)) yield return fdef;
             }
 
-            yield return GetMain(StructDefs, QueryFunctions);
+            yield return GetMain(StructDefs, StructDefsToOrder, QueryFunctions);
         }
 
         static IReadOnlyDictionary<int, (Identifier fn_id, int arg_id)> ScanHoleLines(StreamReader reader) {
@@ -147,6 +171,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
         static FunctionDefinition GetMain(
             IReadOnlyList<StructType> tuple_defs,
+            IReadOnlyList<StructType> tuple_defs_to_order,
             IReadOnlyList<MonoQueryBundle> query_subjects
         ) {
             var instances_needed_per_type = new Dictionary<Identifier, int>();
@@ -154,8 +179,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
             static int map_block_id(int i) => i > 1 ? i - 1 : i;
 
             // at least 3 instances are needed to check transitivity
-            foreach (var t_t in tuple_defs) {
+            foreach (var t_t in tuple_defs_to_order) {
                 instances_needed_per_type.Add(t_t.Id, 3);
+            }
+
+            foreach(var t_t in tuple_defs) {
+                instances_needed_per_type.TryAdd(t_t.Id, 0);
             }
 
             foreach (var subject in query_subjects) {
@@ -188,6 +217,9 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 foreach (var v in l) {
                     st.PutConstructionForInputBlock(raw_outer_args, body, v);
                 }
+            }
+            foreach(var st in tuple_defs_to_order) {
+                var l = instances[st.Id];
                 body.AddRange(st.GetPartialOrderAssertions(l[0], l[1], l[2]));
             }
 
@@ -203,8 +235,6 @@ namespace Semgus.OrderSynthesis.Subproblems {
             body.Add(new MinimizeStatement(cost.Ref()));
 
             return new FunctionDefinition(new FunctionSignature(FunctionModifier.Harness, VoidType.Id, new("main"), raw_outer_args), body);
-
-
         }
 
 
@@ -332,7 +362,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
                 IExpression inputs_ord = target_st.CompareId.Call(a_in, b_in);
                 var guard = query.preconditions.Count == 0 ? inputs_ord :
-                    Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(a_in), p.Call(b_in) }).Append(inputs_ord).ToList());
+                    Op.And.Of(query.preconditions.SelectMany(p => new IExpression[] { p.Call(arg_list_a), p.Call(arg_list_b) }).Append(inputs_ord).ToList());
 
                 var a_out = query.output_transformer.Call(arg_list_a);
                 var b_out = query.output_transformer.Call(arg_list_b);
@@ -347,12 +377,12 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             }
         }
-        public record Output(IReadOnlyList<StructType> StructDefs, IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<AnnotatedQueryFunction> QueryFunctions) {
-            public IEnumerable<(StructType st, FunctionDefinition cmp)> ZipComparisonsToTypes() {
+        public record Output(IReadOnlyList<StructType> StructDefs, IReadOnlyList<StructType> StructDefsToOrder, IReadOnlyList<FunctionDefinition> Comparisons, IReadOnlyList<AnnotatedQueryFunction> QueryFunctions) {
+            public IEnumerable<(StructType st, FunctionDefinition? cmp)> ZipComparisonsToTypes() {
 
                 var a = Comparisons.ToDictionary(c => c.Id);
 
-                return StructDefs.Select(st => (st, a[st.CompareId]));
+                return StructDefs.Select(st => (st, a.TryGetValue(st.CompareId, out var cmp) ? cmp : null));
             }
         }
 
@@ -395,15 +425,15 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Console.WriteLine($"--- [Initial] Reading compare functions ---");
 
-            var compare_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), this.StructDefs.Select(s => s.CompareId));
+            var compare_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), this.StructDefsToOrder.Select(s => s.CompareId));
 
-            Debug.Assert(compare_functions.Count == this.StructDefs.Count, "Failed to extract all comparison functions; halting");
+            Debug.Assert(compare_functions.Count == this.StructDefsToOrder.Count, "Failed to extract all comparison functions; halting");
 
             Console.WriteLine($"--- [Initial] Transforming compare functions ---");
 
             IReadOnlyList<FunctionDefinition> compacted = PipelineUtil.ReduceEachToSingleExpression(compare_functions); // May throw
 
-            return new(StructDefs, compacted, annotated);
+            return new(StructDefs, StructDefsToOrder, compacted, annotated);
         }
 
         private IReadOnlyDictionary<Identifier, Monotonicity[]> InspectMonotonicities(FlexPath file_in, FlexPath file_holes) {

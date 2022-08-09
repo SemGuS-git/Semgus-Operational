@@ -80,7 +80,12 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
         public int Size => Members.Count;
     }
 
-    public record BlockProduction(int TermTypeId, string Name, int SequenceNumber, List<BlockSemantics> Semantics);
+    public record BlockProduction(int TermTypeId, string Name, int SequenceNumber, List<BlockSemantics> Semantics) {
+        internal static BlockProduction MakePlaceholder(int i) {
+            return new BlockProduction(10000, $"[placeholder {i}]", i, new());
+        }
+    }
+
     public record BlockSemantics(List<int> BlockTypes, List<IBlockStep> Steps) {
         internal BlockSemantics WithTfMonotonicities(IReadOnlyList<Monotonicity> mono) {
             List<IBlockStep> new_steps = new();
@@ -493,8 +498,18 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
 
             var type_helper = TypeHelper.From(g_idx, all_prod);
 
-            var block_prod = all_prod.Select(type_helper.GetBlockAbstraction).ToList();
-
+            var block_prod_dict = all_prod.Select(type_helper.GetBlockAbstraction).ToDictionary(p=>p.SequenceNumber);
+            var block_prod = new List<BlockProduction>();
+            for(int i = 0; i <  lib.Productions.Count; i++) {
+                BlockProduction p;
+                if(!block_prod_dict.TryGetValue(i,out p)) {
+                    p = BlockProduction.MakePlaceholder(i);
+                    block_prod_dict.Add(i, p);
+                }
+                block_prod.Add(p);
+            }
+            Debug.Assert(block_prod.Count == lib.Productions.Count);
+            
             var start_symbol_id = 0;
 
             return new(flat_nts, block_prod, type_helper, start_symbol_id);

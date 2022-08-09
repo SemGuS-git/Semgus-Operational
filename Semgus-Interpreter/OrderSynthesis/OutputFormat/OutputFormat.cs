@@ -537,7 +537,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             }
         }
 
-        public DelegateWriteOnlyConverter<LatticeDefs> ToBlockTypes { get; } = new(
+        public DelegateWriteOnlyConverter<IRichTupleDescriptor> ToBlockTypes { get; } = new(
             (writer, value, options) => {
 
                 writer.WriteStartObject();
@@ -549,30 +549,31 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 }
                 writer.WriteEndArray();
 
-                // cmp
-                writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(value.compare));
+                if (value is LatticeDefs lattice) {
+                    // cmp
+                    writer.WriteString("cmp", SexpHelper.ToLatticeFnSexp(lattice.compare));
 
-                // top
-                writer.WriteStartArray("top");
-                SexpHelper.StringifyConstFunction(value.top, value.type).ToList().ForEach(writer.WriteStringValue);
-                writer.WriteEndArray();
+                    // top
+                    writer.WriteStartArray("top");
+                    SexpHelper.StringifyConstFunction(lattice.top, lattice.type).ToList().ForEach(writer.WriteStringValue);
+                    writer.WriteEndArray();
 
-                // bot
-                writer.WriteStartArray("bot");
-                SexpHelper.StringifyConstFunction(value.bot, value.type).ToList().ForEach(writer.WriteStringValue);
-                writer.WriteEndArray();
+                    // bot
+                    writer.WriteStartArray("bot");
+                    SexpHelper.StringifyConstFunction(lattice.bot, lattice.type).ToList().ForEach(writer.WriteStringValue);
+                    writer.WriteEndArray();
 
 
-                // join_incomparable
-                writer.WriteStartArray("join_incomparable");
-                SexpHelper.ToLatticeFnSexpGroup(value.join_incomparable, value.type).ForEach(writer.WriteStringValue);
-                writer.WriteEndArray();
+                    // join_incomparable
+                    writer.WriteStartArray("join_incomparable");
+                    SexpHelper.ToLatticeFnSexpGroup(lattice.join_incomparable, lattice.type).ForEach(writer.WriteStringValue);
+                    writer.WriteEndArray();
 
-                // meet_incomparable
-                writer.WriteStartArray("meet_incomparable");
-                SexpHelper.ToLatticeFnSexpGroup(value.meet_incomparable, value.type).ForEach(writer.WriteStringValue);
-                writer.WriteEndArray();
-
+                    // meet_incomparable
+                    writer.WriteStartArray("meet_incomparable");
+                    SexpHelper.ToLatticeFnSexpGroup(lattice.meet_incomparable, lattice.type).ForEach(writer.WriteStringValue);
+                    writer.WriteEndArray();
+                }
 
 
                 writer.WriteEndObject();
@@ -697,7 +698,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
             Monotonicity.Constant => "constant",
         };
 
-        public DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<LatticeDefs>)> ToOutputDocument { get; } = new DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<LatticeDefs>)>(
+        public DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<IRichTupleDescriptor>)> ToOutputDocument { get; } = new DelegateWriteOnlyConverter<(TupleLibrary, IReadOnlyList<IRichTupleDescriptor>)>(
 
             (writer, value, options) => {
                 var (lang, lattices) = value;
@@ -713,14 +714,17 @@ namespace Semgus.OrderSynthesis.OutputFormat {
                 writer.WriteEndArray();
 
                 writer.WriteStartArray("nonterminals");
-                foreach (var nt in lang.Nonterminals) Converters.Instance.ToNtFmt.Write(writer, (nt, lattices[lang.TypeHelper.GetOutputBlockType(nt.TermType).Id]), options);
+                foreach (var nt in lang.Nonterminals) {
+                    int tt_id = lang.TypeHelper.GetOutputBlockType(nt.TermType).Id;
+                    Converters.Instance.ToNtFmt.Write(writer, (nt, (LatticeDefs)lattices[tt_id]), options);
+                }
                 writer.WriteEndArray();
 
                 writer.WriteEndObject();
             }
         );
 
-        public static string Serialize(TupleLibrary a, IReadOnlyList<LatticeDefs> b) {
+        public static string Serialize(TupleLibrary a, IReadOnlyList<IRichTupleDescriptor> b) {
             var opt = new JsonSerializerOptions() {
                 PropertyNamingPolicy = new SnakeCaseNamingPolicy(), // write SomeProperty as "some_property"
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // don't escape unicode symbols

@@ -35,7 +35,7 @@ namespace Semgus.OrderSynthesis {
                 Solutions = solutions;
             }
 
-            public static TypicalItems Acquire(string filePath, ILogger logger = null) {
+            public static TypicalItems Acquire(string filePath, ILogger? logger = null) {
                 var (smt, sem, info) = ParseUtil.ParseFile(filePath, logger);
                 var lib = OperationalConverter.ProcessProductions(smt.Theories, sem.Chcs);
                 var sf = sem.SynthFuns.Single();
@@ -51,7 +51,7 @@ namespace Semgus.OrderSynthesis {
             }
         }
 
-        public static (SmtContext smt, SemgusContext sem, IReadOnlyList<SmtAttribute> info) ParseFile(string filePath, ILogger logger = null) {
+        public static (SmtContext smt, SemgusContext sem, IReadOnlyList<SmtAttribute> info) ParseFile(string filePath, ILogger? logger = null) {
             if (TryParseFile(filePath, logger, out var smt, out var sem, out var info)) {
                 return (smt, sem, info);
             } else {
@@ -59,7 +59,7 @@ namespace Semgus.OrderSynthesis {
             }
         }
 
-        public static bool TryParseFile(string filePath, ILogger logger, out SmtContext smt, out SemgusContext sem, out IReadOnlyList<SmtAttribute> info) {
+        public static bool TryParseFile(string filePath, ILogger? logger, out SmtContext smt, out SemgusContext sem, out IReadOnlyList<SmtAttribute> info) {
 
             var parser = new SemgusParser(filePath);
 
@@ -67,7 +67,7 @@ namespace Semgus.OrderSynthesis {
 
             bool ok;
 
-            if (logger is null) {
+            if (logger is not null) {
                 using var errWriter = new StringWriter();
                 ok = parser.TryParse(handler, errWriter);
                 var errText = errWriter.ToString();

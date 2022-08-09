@@ -9,7 +9,12 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Semgus.OrderSynthesis.Subproblems {
-    internal record LatticeDefs(StructType type, FunctionDefinition compare, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join_incomparable, FunctionDefinition meet_incomparable) {
+    internal interface IRichTupleDescriptor { 
+        StructType type { get; }
+    }
+    internal record NonLatticeDefs(StructType type) : IRichTupleDescriptor;
+
+    internal record LatticeDefs(StructType type, FunctionDefinition compare, FunctionDefinition top, FunctionDefinition bot, FunctionDefinition join_incomparable, FunctionDefinition meet_incomparable) : IRichTupleDescriptor {
         internal IEnumerable<FunctionDefinition> GetEach() {
             yield return top;
             yield return bot;
@@ -19,12 +24,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
     }
 
     internal class LatticeStep {
-        public LatticeStep(IEnumerable<(StructType type, FunctionDefinition compare)> targets) {
+        public List<(StructType type, FunctionDefinition? compare)> Targets { get; }
+
+        public LatticeStep(IEnumerable<(StructType type, FunctionDefinition? compare)> targets) {
             this.Targets = targets.ToList();
         }
-        public List<(StructType type, FunctionDefinition compare)> Targets { get; }
 
-        public record Output(IReadOnlyList<LatticeDefs> Lattices);
+        public record Output(IReadOnlyList<IRichTupleDescriptor> Lattices);
 
         private static async Task<LatticeDefs> DoOne(FlexPath dir, StructType type, FunctionDefinition compare, bool skip_refine) {
 
@@ -95,13 +101,17 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             System.Console.WriteLine($"--- [Lattice] starting ---");
 
-            List<LatticeDefs> output = new();
+            List<IRichTupleDescriptor> output = new();
 
             foreach (var (type, compare) in Targets) {
-                var result = await DoOne(dir.Append($"{type.Id}/"), type, compare, skip_refine);
-                output.Add(result);
+                if (compare is null) {
+                    output.Add(new NonLatticeDefs(type));
+                } else {
+                    var result = await DoOne(dir.Append($"{type.Id}/"), type, compare, skip_refine);
+                    output.Add(result);
 
-                PipelineUtil.WriteSketchFile(dir.Append($"{type.Id}.lattice.sk"), result.GetEach());
+                    PipelineUtil.WriteSketchFile(dir.Append($"{type.Id}.lattice.sk"), result.GetEach());
+                }
             }
 
             System.Console.WriteLine($"--- [Lattice] done ---");
