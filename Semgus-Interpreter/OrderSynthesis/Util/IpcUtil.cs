@@ -38,11 +38,10 @@ namespace Semgus.OrderSynthesis
             ProcessStartInfo start = new();
             start.WorkingDirectory = wd.Value;
             start.FileName = "time";
-            start.Arguments = $"sketch --fe-output-xml {WrapInnerArgString(file_xml)} {WrapInnerArgString(file_sketch)}";
-            //start.Arguments = $"-h";
-            //start.Arguments = $"--fe-output-xml {file_xml} {file_sketch} > {file_soln}";
-            //start.FileName = "time";
-            //start.Arguments = $"sketch --fe-output-xml {file_xml} {file_sketch} > {file_soln}";
+
+            // Invoke sketch with fixed seed `1`
+            start.Arguments = $"sketch --slv-seed 1 --fe-output-xml {WrapInnerArgString(file_xml)} {WrapInnerArgString(file_sketch)}";
+
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
             start.RedirectStandardError = true;
