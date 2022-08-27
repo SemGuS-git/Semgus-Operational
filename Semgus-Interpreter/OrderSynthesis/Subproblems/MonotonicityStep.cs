@@ -386,31 +386,29 @@ namespace Semgus.OrderSynthesis.Subproblems {
             }
         }
 
-        public async Task<Output> Execute(FlexPath dir, bool reuse_previous = false) {
-            var file_in = dir.Append("input.sk");
-            var file_out = dir.Append("result.sk");
-            var file_holes = dir.Append("result.holes.xml");
-            var file_mono = dir.Append("result.mono.json");
-            var file_cmp = dir.Append("result.comparisons.sk");
+        public async Task<Output> Execute(FlexPath dir) {
+            var file_in = dir / "input.sk";
+            var file_out = dir / "result.sk";
+            var file_holes = dir / "result.holes.xml";
+            var file_mono = dir / "result.mono.json";
+            var file_cmp = dir / "result.comparisons.sk";
 
-            if (reuse_previous) {
-                System.Console.WriteLine($"--- [Initial] Reusing prior Sketch output from {file_out} ---");
+            Directory.CreateDirectory(dir.Value);
+
+            System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
+            WriteSketchInputFile(file_in);
+
+            System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
+
+            var (sketch_ok,sketch_out) = await IpcUtil.RunSketch(dir, "input.sk", "result.holes.xml");
+
+            _ = Task.Run(() => File.WriteAllText(file_out.Value, sketch_out));
+
+            if (sketch_ok) {
+                Console.WriteLine($"--- [Initial] Sketch succeeded ---");
             } else {
-                Directory.CreateDirectory(dir.PathWin);
-
-                System.Console.WriteLine($"--- [Initial] Writing input file at {file_in} ---");
-                WriteSketchInputFile(file_in);
-
-                System.Console.WriteLine($"--- [Initial] Invoking Sketch on {file_in} ---");
-
-                var sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-                if (sketch_result) {
-                    Console.WriteLine($"--- [Initial] Sketch succeeded ---");
-                } else {
-                    Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
-                    throw new Exception("Sketch rejected");
-                }
+                Console.WriteLine($"--- [Initial] Sketch rejected; halting ---");
+                throw new Exception("Sketch rejected");
             }
 
             Console.WriteLine($"--- [Initial] Extracting monotonicities ---");
@@ -425,7 +423,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             Console.WriteLine($"--- [Initial] Reading compare functions ---");
 
-            var compare_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), this.StructDefsToOrder.Select(s => s.CompareId));
+            var compare_functions = PipelineUtil.ReadSelectedFunctions(sketch_out, this.StructDefsToOrder.Select(s => s.CompareId));
 
             Debug.Assert(compare_functions.Count == this.StructDefsToOrder.Count, "Failed to extract all comparison functions; halting");
 
@@ -441,13 +439,13 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
             IReadOnlyDictionary<int, (Identifier fn_id, int arg_id)> line_map;
 
-            using (var sr = new StreamReader(file_in.PathWin)) {
+            using (var sr = new StreamReader(file_in.Value)) {
                 line_map = ScanHoleLines(sr);
             }
 
             HolesXmlDoc doc;
 
-            using (var fs = new FileStream(file_holes.PathWin, FileMode.Open)) {
+            using (var fs = new FileStream(file_holes.Value, FileMode.Open)) {
                 doc = (HolesXmlDoc)ser.Deserialize(fs)!;
             }
 
@@ -455,7 +453,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
         }
 
         private void WriteSketchInputFile(FlexPath file_in) {
-            using (StreamWriter sw = new(file_in.PathWin)) {
+            using (StreamWriter sw = new(file_in.Value)) {
                 LineReceiver receiver = new(sw);
                 foreach (var a in this.GetFile()) {
                     a.WriteInto(receiver);

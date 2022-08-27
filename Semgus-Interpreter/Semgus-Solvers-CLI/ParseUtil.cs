@@ -114,9 +114,9 @@ namespace Semgus.CommandLineInterface {
                 Info.Add(attr);
             }
 
-            public void OnSynthFun(SmtContext ctx, SmtIdentifier name, IList<SmtConstant> args, SmtSort sort) {
+            public void OnSynthFun(SmtContext ctx, SmtIdentifier name, IList<(SmtIdentifier, SmtSortIdentifier)> args, SmtSort sort)
+            {
                 if (HitCheckSynth) throw new NotSupportedException("synth-fun after check-synth");
-
             }
 
             public void OnTermTypes(IReadOnlyList<SemgusTermType> termTypes) {

@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace Semgus.OrderSynthesis {
     internal static class PipelineUtil {
         public static void WriteSketchFile(FlexPath path, IEnumerable<IStatement> content) {
-            using StreamWriter sw = new(path.PathWin);
+            using StreamWriter sw = new(path.Value);
             LineReceiver receiver = new(sw);
 
             foreach (var a in content) {
@@ -20,8 +20,8 @@ namespace Semgus.OrderSynthesis {
         record MonoOutputLine(string Alias, IReadOnlyList<Monotonicity> Labels);
 
         public static async Task WriteState(FlexPath path, PipelineState state) {
-            Directory.CreateDirectory(path.PathWin);
-            File.WriteAllText(path.Append("step_reached.txt").PathWin, state.Reached.ToString());
+            Directory.CreateDirectory(path.Value);
+            File.WriteAllText(path.Append("step_reached.txt").Value, state.Reached.ToString());
 
             if (state.Comparisons is not null) {
                 PipelineUtil.WriteSketchFile(path.Append("comparisons.sk"), state.Comparisons);
@@ -32,7 +32,7 @@ namespace Semgus.OrderSynthesis {
                     obj.Add(a.Function.Id.ToString(), new(a.Function.Alias!, a.ArgMonotonicities));
                 }
 
-                using var fs = File.OpenWrite(path.Append("monotonicities.json").PathWin);
+                using var fs = File.OpenWrite(path.Append("monotonicities.json").Value);
                 await JsonSerializer.SerializeAsync(fs, obj);
             }
             if (state.Lattices is not null) {

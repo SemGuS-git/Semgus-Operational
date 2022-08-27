@@ -54,16 +54,16 @@ namespace Semgus.OrderSynthesis {
             Console.WriteLine(helpText);
         }
 
-        static async Task Main(Options opt) { 
-            FlexPath input_file = FlexPath.FromWin(Path.GetFullPath(opt.InputFile));
+        static async Task Main(Options opt) {
+            FlexPath input_file = new(Path.GetFullPath(opt.InputFile));
 
-            if(!File.Exists(input_file.PathWin)) {
-                throw new FileNotFoundException("Missing input file", input_file.PathWin);
+            if(!File.Exists(input_file.Value)) {
+                throw new FileNotFoundException("Missing input file", input_file.Value);
             }
 
 
             
-            var items = ParseUtil.TypicalItems.Acquire(input_file.PathWin); // May throw
+            var items = ParseUtil.TypicalItems.Acquire(input_file.Value); // May throw
 
             var start_symbol = items.Constraint.StartSymbol;
             Debug.Assert(items.Grammar.Nonterminals.Contains(start_symbol));
@@ -71,21 +71,21 @@ namespace Semgus.OrderSynthesis {
             var g_idx = GrammarIndexing.From(items.Grammar);
 
 
-            var dir = FlexPath.FromWin(string.IsNullOrWhiteSpace(opt.OutputPath) ? input_file.PathWin + ".out/" : Path.GetFullPath(opt.OutputPath));
+            FlexPath dir = new (string.IsNullOrWhiteSpace(opt.OutputPath) ? input_file.Value + ".out/" : Path.GetFullPath(opt.OutputPath));
 
-            var dir_info = new DirectoryInfo(dir.PathWin);
+            var dir_info = new DirectoryInfo(dir.Value);
 
-            if(File.Exists(dir.PathWin)) {
+            if(File.Exists(dir.Value)) {
                 if(opt.Overwrite) {
-                    File.Delete(dir.PathWin);
+                    File.Delete(dir.Value);
                 } else {
-                    throw new IOException($"Output path {dir.PathWin} is occupied by a file");
+                    throw new IOException($"Output path {dir.Value} is occupied by a file");
                 }
             } else if (dir_info.Exists) {
                 if(opt.Overwrite) {
                     dir_info.Delete(true);
                 } else {
-                    throw new IOException($"Output path {dir.PathWin} is occupied by a directory");
+                    throw new IOException($"Output path {dir.Value} is occupied by a directory");
                 }
             }
 
@@ -94,13 +94,13 @@ namespace Semgus.OrderSynthesis {
             Console.WriteLine($"Writing output to directory {dir_info.FullName}");
 
             {
-                var json_file = dir.Append("concrete_sem.json");
-                File.WriteAllText(json_file.PathWin, OutputFormat.ConcConverters.Serialize(items.Library));
+                var json_file = dir / "concrete_sem.json";
+                File.WriteAllText(json_file.Value, OutputFormat.ConcConverters.Serialize(items.Library));
                 Console.WriteLine("--- Wrote conc file ---");
             }
             {
-                var json_file = dir.Append("specification.json");
-                File.WriteAllText(json_file.PathWin, OutputFormat.SpecConverters.Serialize(g_idx,items.Grammar,items.Constraint));
+                var json_file = dir / "specification.json";
+                File.WriteAllText(json_file.Value, OutputFormat.SpecConverters.Serialize(g_idx,items.Grammar,items.Constraint));
                 Console.WriteLine("--- Wrote spec file ---");
             }
 
@@ -117,8 +117,8 @@ namespace Semgus.OrderSynthesis {
                 Console.WriteLine("--- Abs sem monotonized ---");
 
                 {
-                    var json_file = dir.Append("abstract_sem.json");
-                    File.WriteAllText(json_file.PathWin, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
+                    var json_file = dir / "abstract_sem.json";
+                    File.WriteAllText(json_file.Value, OutputFormat.Converters.Serialize(abs_sem, lattices.Lattices));
                     Console.WriteLine("--- Wrote abs file ---");
                 }
             }
@@ -126,7 +126,7 @@ namespace Semgus.OrderSynthesis {
             Console.WriteLine("--- Done ---");
         }
 
-        static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InterpretationLibrary conc, TupleLibrary abs_sem_raw, bool reuse_previous = false) {
+        static async Task<(MonotonicityStep.Output cores, LatticeStep.Output lattices)> RunPipeline(FlexPath dir, InterpretationLibrary conc, TupleLibrary abs_sem_raw) {
 
             PipelineState? state = null;
 
@@ -137,7 +137,7 @@ namespace Semgus.OrderSynthesis {
 
                     //state = new(PipelineState.Step.Initial, step.StructTypeMap, step.Structs);
 
-                    rho = await step.Execute(dir.Append("step_1_mono/"), reuse_previous); // May throw
+                    rho = await step.Execute(dir.Append("step_1_mono/")); // May throw
 
                     //state = state with {
                     //    Reached = PipelineState.Step.Monotonicity,
@@ -148,7 +148,7 @@ namespace Semgus.OrderSynthesis {
                 }
 
                 {
-                    var result = await OrderExpansionStep.ExecuteLoop(dir.Append("step_2_expand/"), rho, reuse_previous); // May throw
+                    var result = await OrderExpansionStep.ExecuteLoop(dir.Append("step_2_expand/"), rho); // May throw
                     rho = rho with {  Comparisons = result.Comparisons };
                     //state = state with { Reached = PipelineState.Step.OrderExpansion, Comparisons = result.Comparisons };
                 }
@@ -156,7 +156,7 @@ namespace Semgus.OrderSynthesis {
                 try {
 
                     var step = new SimplificationStep(rho);
-                    var result = await step.Execute(dir.Append("step_3_simplify/"), reuse_previous);
+                    var result = await step.Execute(dir.Append("step_3_simplify/"));
                     rho = rho with { Comparisons = result.Comparisons };
 
                     //state = state with { Reached = PipelineState.Step.Simplification, Comparisons = result.Comparisons };
@@ -189,7 +189,7 @@ namespace Semgus.OrderSynthesis {
                 Console.Error.Write(e);
                 Console.Error.Write("Halting");
                 if (state is not null) {
-                    var stash = dir.Append("incomplete_result/");
+                    var stash = dir / "incomplete_result/";
                     await PipelineUtil.WriteState(stash, state);
                 }
                 throw;

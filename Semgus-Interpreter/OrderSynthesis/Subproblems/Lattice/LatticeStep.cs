@@ -44,30 +44,34 @@ namespace Semgus.OrderSynthesis.Subproblems {
             foreach (var generator in new ILatticeSubstep[] { gen_top, gen_bot, gen_join, gen_meet }) {
                 System.Console.WriteLine($"--- [Lattice] doing {generator.SynthFunId} for {type.Id} ---");
 
-                var base_path = dir.Append($"{generator.SynthFunId}");
+                var base_path = dir / $"{generator.SynthFunId}";
 
                 var content = generator.GetInitialFile();
 
-                var current_zone = base_path.Append("_init/");
+                var current_zone = base_path / "_init/";
 
                 FunctionDefinition? synth_item = null;
 
                 const int MAX_ITER = 100;
                 for (int i = 0; i < (skip_refine ? 1 : MAX_ITER); i++) {
-                    Directory.CreateDirectory(current_zone.PathWin);
+                    Directory.CreateDirectory(current_zone.Value);
 
-                    var file_in = current_zone.Append("input.sk");
-                    var file_out = current_zone.Append("result.sk");
-                    var file_xml = current_zone.Append("holes.xml");
+                    var file_in = current_zone / "input.sk";
+                    var file_out = current_zone / "result.sk";
+                    var file_xml = current_zone / "holes.xml";
                     PipelineUtil.WriteSketchFile(file_in, content);
 
-                    if (!(await Wsl.RunSketch(file_in, file_out, file_xml))) {
+                    var (sketch_ok, sketch_out) = await IpcUtil.RunSketch(current_zone, "input.sk", "result.holes.xml");
+
+                    _ = Task.Run(() => File.WriteAllText(file_out.Value, sketch_out));
+
+                    if (!sketch_ok) {
                         break;
                     }
 
-                    synth_item = await ReadTarget(file_out, generator.SynthFunId);
+                    synth_item = ReadTarget(sketch_out, generator.SynthFunId);
                     content = generator.GetRefinementFile(synth_item.RenamedTo(new("prev_" + synth_item.Id)));
-                    current_zone = base_path.Append($"_{i}/");
+                    current_zone = base_path / $"_{i}/";
                 }
 
                 if (synth_item is null) {
@@ -90,14 +94,14 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
 
 
-        static async Task<FunctionDefinition> ReadTarget(FlexPath path, Identifier targetId) {
-            var result_fn = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(path.PathWin), new[] { targetId }).Single();
+        static FunctionDefinition ReadTarget(string text, Identifier targetId) {
+            var result_fn = PipelineUtil.ReadSelectedFunctions(text, new[] { targetId }).Single();
             return PipelineUtil.SloppyFunctionalize(result_fn);
         }
 
 
         public async Task<Output> Execute(FlexPath dir, bool skip_refine) {
-            Directory.CreateDirectory(dir.PathWin);
+            Directory.CreateDirectory(dir.Value);
 
             System.Console.WriteLine($"--- [Lattice] starting ---");
 
@@ -107,10 +111,10 @@ namespace Semgus.OrderSynthesis.Subproblems {
                 if (compare is null) {
                     output.Add(new NonLatticeDefs(type));
                 } else {
-                    var result = await DoOne(dir.Append($"{type.Id}/"), type, compare, skip_refine);
+                    var result = await DoOne(dir / $"{type.Id}/", type, compare, skip_refine);
                     output.Add(result);
 
-                    PipelineUtil.WriteSketchFile(dir.Append($"{type.Id}.lattice.sk"), result.GetEach());
+                    PipelineUtil.WriteSketchFile(dir / $"{type.Id}.lattice.sk", result.GetEach());
                 }
             }
 

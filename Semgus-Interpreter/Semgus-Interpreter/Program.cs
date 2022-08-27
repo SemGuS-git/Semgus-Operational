@@ -37,12 +37,12 @@ public static class Program {
         Console.WriteLine("OK 3");
 
         var sf = handler.OutSem.SynthFuns.Single();
-        var bc = handler.OutSem.Constraints.Where(c=>InductiveConstraintConverter.IsShapedLikeBehaviorExampleFor(sf,c)).ToList();
+        var bc = handler.OutSem.Constraints.Where(c => InductiveConstraintConverter.IsShapedLikeBehaviorExampleFor(sf, c)).ToList();
 
-        var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.SemanticRelations).ProcessConstraints(bc);
+        var spec = new InductiveConstraintConverter(lib.Theory, sf, lib.SemanticRelations).ProcessConstraints(bc);
 
         Console.WriteLine("OK 4");
-        var solver = new BottomUpSolver(new() { CostFunction = TermCostFunction.Size, Reductions = new(){ ReductionMethod.ObservationalEquivalence} });
+        var solver = new BottomUpSolver(new() { CostFunction = TermCostFunction.Size, Reductions = new() { ReductionMethod.ObservationalEquivalence } });
 
         using var innerLogger = MakeLogCfg(LogEventLevel.Verbose).CreateLogger();
         var logger = new SerilogLoggerProvider(innerLogger).CreateLogger(nameof(Program));
@@ -84,7 +84,7 @@ public static class Program {
         }
 
         public void OnConstraint(SmtContext smtCtx, SemgusContext semgusCxt, SmtTerm constraint) {
-            
+
         }
 
         public void OnSetInfo(SmtContext ctx, SmtAttribute attr) {
@@ -98,8 +98,7 @@ public static class Program {
             }
         }
 
-        public void OnSynthFun(SmtContext ctx, SmtIdentifier name, IList<SmtConstant> args, SmtSort sort) {
-
+        public void OnSynthFun(SmtContext ctx, SmtIdentifier name, IList<(SmtIdentifier, SmtSortIdentifier)> args, SmtSort sort) {
         }
 
         public void OnTermTypes(IReadOnlyList<SemgusTermType> termTypes) {

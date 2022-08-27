@@ -50,40 +50,34 @@ namespace Semgus.OrderSynthesis.Subproblems {
 
         public record Output(IReadOnlyList<FunctionDefinition> Comparisons);
 
-        public async Task<Output> Execute(FlexPath dir, bool reuse_prev = false) {
-            Directory.CreateDirectory(dir.PathWin);
+        public async Task<Output> Execute(FlexPath dir) {
+            Directory.CreateDirectory(dir.Value);
 
-            var file_in = dir.Append("input.sk");
-            var file_out = dir.Append("result.sk");
-            var file_holes = dir.Append("result.holes.xml");
-            //var file_cmp = dir.Append("result.comparisons.sk");
+            var file_in = dir / "input.sk";
+            var file_out = dir / "result.sk";
+            var file_holes = dir / "result.holes.xml";
+            //var file_cmp = dir / "result.comparisons.sk";
 
-            if (reuse_prev) {
-                System.Console.WriteLine($"--- [Reduction] Reusing prev ---");
-                if (!File.Exists(file_out.PathWin)) {
-                    System.Console.WriteLine($"--- [Reduction] No prev result (throw) ---");
-                    throw new Exception("Oof");
+            System.Console.WriteLine($"--- [Reduction] Writing input file at {file_in} ---");
+
+            using (StreamWriter sw = new(file_in.Value)) {
+                LineReceiver receiver = new(sw);
+                foreach (var a in this.GetFile()) {
+                    a.WriteInto(receiver);
                 }
+            }
+
+            System.Console.WriteLine($"--- [Reduction] Invoking Sketch on {file_in} ---");
+
+            var (sketch_ok, sketch_out) = await IpcUtil.RunSketch(dir, "input.sk", "result.holes.xml");
+
+            _ = Task.Run(() => File.WriteAllText(file_out.Value, sketch_out));
+
+            if (sketch_ok) {
+                Console.WriteLine($"--- [Reduction] Sketch succeeded ---");
             } else {
-                System.Console.WriteLine($"--- [Reduction] Writing input file at {file_in} ---");
-
-                using (StreamWriter sw = new(file_in.PathWin)) {
-                    LineReceiver receiver = new(sw);
-                    foreach (var a in this.GetFile()) {
-                        a.WriteInto(receiver);
-                    }
-                }
-
-                System.Console.WriteLine($"--- [Reduction] Invoking Sketch on {file_in} ---");
-
-                var step2_sketch_result = await Wsl.RunSketch(file_in, file_out, file_holes);
-
-                if (step2_sketch_result) {
-                    Console.WriteLine($"--- [Reduction] Sketch succeeded ---");
-                } else {
-                    Console.WriteLine($"--- [Reduction] Sketch rejected; reduction failed ---");
-                    throw new Exception("Sketch rejected");
-                }
+                Console.WriteLine($"--- [Reduction] Sketch rejected; reduction failed ---");
+                throw new Exception("Sketch rejected");
             }
 
             Console.WriteLine($"--- [Reduction] Reading compare functions ---");
@@ -93,7 +87,7 @@ namespace Semgus.OrderSynthesis.Subproblems {
             var extraction_targets = compare_ids.Concat(this.PrevComparisonsByStId.Values.Select(p => p.Id));
             IReadOnlyList<FunctionDefinition> extracted_functions = Array.Empty<FunctionDefinition>();
             try {
-                extracted_functions = PipelineUtil.ReadSelectedFunctions(await File.ReadAllTextAsync(file_out.PathWin), extraction_targets);
+                extracted_functions = PipelineUtil.ReadSelectedFunctions(sketch_out, extraction_targets);
             } catch (Exception) {
                 Console.WriteLine($"--- [Reduction] Failed to extract all comparison functions ---");
                 throw;
