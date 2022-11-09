@@ -7,7 +7,7 @@ namespace Semgus.Operational {
         public static object EvalConstant(this ITheoryImplementation theory, SmtTerm term) {
             switch (term) {
                 case SmtFunctionApplication fa:
-                    if (!theory.TryGetFunction(fa.Definition, fa.Rank, out var fn)) throw new KeyNotFoundException();
+                    if (!theory.TryGetFunction((SmtFunction) fa.Definition, fa.Rank, out var fn)) throw new KeyNotFoundException();
                     var args = new object[fa.Rank.Arity];
                     for (int i = 0; i < args.Length; i++) {
                         args[i] = EvalConstant(theory, fa.Arguments[i]);

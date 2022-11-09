@@ -21,11 +21,11 @@ namespace Semgus.Operational {
             Theory = theory;
             SemanticRelations = relations;
             Productions = productions;
-            _signatureMap = productions.ToDictionary(prod => ToSyntaxKey(prod.TermType,prod.SyntaxConstructor));
+            _signatureMap = productions.ToDictionary(prod => ToSyntaxKey((SemgusTermType)prod.TermType,prod.SyntaxConstructor));
 
             Dictionary<string, SemgusTermType> temp = new();
             foreach(var prod in productions) {
-                temp.TryAdd(prod.TermType.Name.AsString(), prod.TermType);
+                temp.TryAdd(prod.TermType.Name.AsString(), (SemgusTermType)prod.TermType);
             }
             TermTypes = new List<SemgusTermType>(temp.Values);
         }

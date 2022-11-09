@@ -184,7 +184,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
 
             // Scan shapes
             foreach (var prod in relevant_productions) {
-                var ttk = prod.TermType.GetKey();
+                var ttk = ((SemgusTermType)prod.TermType).GetKey();
                 int tt_id = term_type_ids[ttk];
     
                 insert_shape_or_assert_eq(tt_id, false, prod.InputVariables);
@@ -204,7 +204,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
             return new(g_idx, block_types, io_list);
         }
         public BlockProduction GetBlockAbstraction(ProductionRuleInterpreter prod) {
-            var term_type = this.GetTermTypeId(prod.TermType);
+            var term_type = this.GetTermTypeId((SemgusTermType)prod.TermType);
             var name = prod.SyntaxConstructor.Operator.AsString();
             var semantics = prod.Semantics.Select(a => GetBlockAbstraction(a)).ToList();
             return new(term_type, name, prod.SequenceNumber, semantics);
@@ -216,8 +216,8 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                 .ToList();
 
             var block_types = new List<BlockDef>() {
-                this.GetInputBlockType(term_types[0]),
-                this.GetOutputBlockType(term_types[0])
+                this.GetInputBlockType((SemgusTermType)term_types[0]),
+                this.GetOutputBlockType((SemgusTermType)term_types[0])
             };
 
             Debug.Assert(prod.InputVariables.Count == block_types[0].Size);
@@ -262,7 +262,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                             Debug.Assert(first.block_id == 1); // if the output block is known, we require it to be the sem output
                             Debug.Assert(first.slot == 0);
 
-                            var output_block_type = this.GetOutputBlockType(term_types[eval.Term.Index]);
+                            var output_block_type = this.GetOutputBlockType((SemgusTermType) term_types[eval.Term.Index]);
                             Debug.Assert(block_types[1] == output_block_type);
 
                             Debug.Assert(!sem_output_is_passthrough); // throw if we're already assigning output from another term eval
@@ -279,7 +279,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                         } else {
                             // Declare new output block
                             output_id = block_types.Count;
-                            var output_block_type = this.GetOutputBlockType(term_types[eval.Term.Index]);
+                            var output_block_type = this.GetOutputBlockType((SemgusTermType) term_types[eval.Term.Index]);
                             block_types.Add(output_block_type);
 
                             for (int i = 0; i < eval.OutputVariables.Count; i++) {
@@ -434,7 +434,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                 var the_term_type = prods[0].Production.TermType;
                 Debug.Assert(prods.All(prod => prod.Production.TermType == the_term_type));
 
-                nt_term_types.Add(nt_id, the_term_type);
+                nt_term_types.Add(nt_id, (SemgusTermType)the_term_type);
 
                 var ttk = the_term_type.Name.Name.Symbol;
 
@@ -487,7 +487,7 @@ namespace Semgus.OrderSynthesis.IntervalSemantics {
                     fgpl.Add(new(prod_id, nt_prod.ChildNonterminals.Select(a => nt_ids[a]).ToList()));
 
 
-                    var ttk = nt_prod.Production.TermType.GetKey();
+                    var ttk = ((SemgusTermType) nt_prod.Production.TermType).GetKey();
                     Debug.Assert(term_type_ids.TryGetValue(ttk, out var tti) && nt_term_type_id == tti);
                 }
 

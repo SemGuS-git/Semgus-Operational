@@ -1,11 +1,12 @@
 ﻿using Semgus.Model;
+using Semgus.Model.Smt;
 using System.Text;
 
 namespace Semgus.Operational {
     public class ProductionRuleInterpreter {
         public int SequenceNumber { get; }
 
-        public SemgusTermType TermType { get; }
+        public SmtSort TermType { get; }
         public SemgusTermType.Constructor SyntaxConstructor { get; }
 
         public IReadOnlyList<VariableInfo> InputVariables { get; }
@@ -18,7 +19,7 @@ namespace Semgus.Operational {
         public IReadOnlyList<SemanticRuleInterpreter> Semantics => _semantics;
         private readonly List<SemanticRuleInterpreter> _semantics = new();
 
-        public ProductionRuleInterpreter(int sequenceNumber, SemgusTermType termType, SemgusTermType.Constructor syntaxConstructor, IReadOnlyList<VariableInfo> inputVariables, IReadOnlyList<VariableInfo> outputVariables) {
+        public ProductionRuleInterpreter(int sequenceNumber, SmtSort termType, SemgusTermType.Constructor syntaxConstructor, IReadOnlyList<VariableInfo> inputVariables, IReadOnlyList<VariableInfo> outputVariables) {
             SequenceNumber = sequenceNumber;
             TermType = termType;
             SyntaxConstructor = syntaxConstructor;

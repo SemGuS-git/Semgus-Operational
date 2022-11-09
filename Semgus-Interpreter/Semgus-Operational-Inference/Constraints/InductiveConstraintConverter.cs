@@ -1,4 +1,5 @@
 ﻿using Semgus.Model;
+using Semgus.Model.Smt;
 using Semgus.Model.Smt.Terms;
 using Semgus.Operational;
 using System.Diagnostics.CodeAnalysis;
@@ -40,7 +41,7 @@ namespace Semgus.Constraints {
             constraintTerm is SmtFunctionApplication constraintAppl &&
             constraintAppl.Arguments.Count >= 1 &&
             constraintAppl.Arguments[0] is SmtFunctionApplication sfAppl &&
-            sfAppl.Definition.StringName() == sf.Relation.StringName();
+            sfAppl.Definition.Name.AsString() == sf.Relation.StringName();
         
         public BehaviorExample ProcessBehaviorExample(SmtTerm constraintTerm) {
             var sfName = _synthFun.Relation.StringName();
@@ -49,8 +50,8 @@ namespace Semgus.Constraints {
                 constraintTerm is not SmtFunctionApplication constraintAppl ||
                 constraintAppl.Arguments.Count < 1 ||
                 constraintAppl.Arguments[0] is not SmtFunctionApplication sfAppl ||
-                sfAppl.Definition.StringName() != sfName ||
-                !_relations.TryMatchName(constraintAppl.Definition.StringName(), out var rel)
+                sfAppl.Definition.Name.AsString() != sfName ||
+                !_relations.TryMatchName(constraintAppl.Definition.Name.AsString(), out var rel)
             ) {
                 throw new NotSupportedException("Constraint must be of the form (semantic_relation_name synth_fun_name [constant_expression...])");
             }
