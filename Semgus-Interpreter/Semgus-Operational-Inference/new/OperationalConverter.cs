@@ -86,13 +86,17 @@ namespace Semgus {
                 var a when a == SmtCommonIdentifiers.CoreTheoryId => new SmtCoreTheoryImpl(sortHelper),
                 var a when a == SmtCommonIdentifiers.IntsTheoryId => new SmtIntsTheoryImpl(sortHelper),
                 var b when b == SmtCommonIdentifiers.StringsTheoryId => new SmtStringsTheoryImpl(sortHelper),
+                //var b when b == SmtCommonIdentifiers.BitVectorsTheoryId => new SmtBitVectorsTheoryImpl(sortHelper),
                 _ => throw new NotImplementedException(),
             };
         }
 
-        public static InterpretationLibrary ProcessProductions(SmtContext context, IEnumerable<ISmtTheory> theories, IEnumerable<SemgusChc> chcs) {
-            var theoriesList = theories.ToList();
+        public static InterpretationLibrary ProcessProductions(SmtContext context, IEnumerable<SemgusChc> chcs) {
+            var theoriesList = context.Theories.ToList();
             var sortHelper = new SortHelper(context);
+
+            //todo: for now, ignore bitvector theories
+            theoriesList.RemoveAt(3);
 
             var theory = new UnionTheoryImpl(theoriesList.Select(th => MapTheory(th, sortHelper)));
 
