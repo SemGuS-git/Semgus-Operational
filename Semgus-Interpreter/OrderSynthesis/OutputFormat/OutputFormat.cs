@@ -319,7 +319,7 @@ namespace Semgus.OrderSynthesis.OutputFormat {
 
         static ITheoryImplementation MakeTheory() {
             var smt = new Model.Smt.SmtContext();
-            var sortHelper = new SortHelper(smt.Theories.ToList());
+            var sortHelper = new SortHelper(smt);
             return new UnionTheoryImpl(new ITheoryImplementation[] {
                 new SmtCoreTheoryImpl(sortHelper),
                 new SmtIntsTheoryImpl(sortHelper),

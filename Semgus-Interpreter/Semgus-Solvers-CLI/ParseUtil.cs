@@ -36,7 +36,7 @@ namespace Semgus.CommandLineInterface {
 
             public static TypicalItems Acquire(string filePath, ILogger logger = null) {
                 var (smt, sem, info) = ParseUtil.ParseFile(filePath, logger);
-                var lib = OperationalConverter.ProcessProductions(smt.Theories, sem.Chcs);
+                var lib = OperationalConverter.ProcessProductions(smt, smt.Theories, sem.Chcs);
                 var sf = sem.SynthFuns.Single();
                 var grammar = OperationalConverter.ProcessGrammar(sf.Grammar, lib);
                 var spec = new InductiveConstraintConverter(lib.Theory,sf,lib.SemanticRelations).ProcessConstraints(sem.Constraints);

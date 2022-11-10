@@ -15,24 +15,19 @@ using System.Diagnostics;
 namespace Semgus {
 
     public class SortHelper : ISortHelper {
-        private readonly IReadOnlyList<ISmtTheory> _theoriesList;
+        private readonly SmtContext _context;
 
-        public SortHelper(List<ISmtTheory> theoriesList) {
-            this._theoriesList = theoriesList;
+        public SortHelper(SmtContext context) {
+            this._context = context;
         }
 
         public bool TryGetSort(SmtSortIdentifier id, out SmtSort sort) {
             SmtSort found = default;
             bool got = false;
-            foreach (var theory in _theoriesList) {
-                if(theory.Sorts.TryGetValue(id.Name,out var now)) {
-                    if(got) {
-                        throw new Exception($"Found multiple sorts with ID {id}");
-                    } else {
-                        found = now;
-                        got = true;
-                    }
-                }
+            if(_context.TryGetSortDeclaration(id, out var now))
+            {
+                found = now;
+                got = true;
             }
             sort = got ? found! : default;
             return got;
@@ -95,9 +90,9 @@ namespace Semgus {
             };
         }
 
-        public static InterpretationLibrary ProcessProductions(IEnumerable<ISmtTheory> theories, IEnumerable<SemgusChc> chcs) {
+        public static InterpretationLibrary ProcessProductions(SmtContext context, IEnumerable<ISmtTheory> theories, IEnumerable<SemgusChc> chcs) {
             var theoriesList = theories.ToList();
-            var sortHelper = new SortHelper(theoriesList);
+            var sortHelper = new SortHelper(context);
 
             var theory = new UnionTheoryImpl(theoriesList.Select(th => MapTheory(th, sortHelper)));
 

@@ -28,7 +28,7 @@ public static class Program {
         Console.WriteLine("OK 1");
 
 
-        var lib = OperationalConverter.ProcessProductions(handler.OutSmt!.Theories, handler.OutSem!.Chcs.ToList());
+        var lib = OperationalConverter.ProcessProductions(handler.OutSmt!, handler.OutSmt!.Theories, handler.OutSem!.Chcs.ToList());
 
         Console.WriteLine("OK 2");
 
